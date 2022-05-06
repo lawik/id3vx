@@ -87,8 +87,7 @@ defmodule Id3vx.Frame do
     WXXX User defined URL link frame
   """
 
-  defstruct
-    id: nil,
+  defstruct id: nil,
     size: nil,
     flags: nil,
     label: nil, # "Payment", "Album sort order", "Title/songname/content description"
@@ -97,9 +96,22 @@ defmodule Id3vx.Frame do
   alias Id3vx.Frame
 
   def parse("T" <> _ = id, flags, data) do
-    parse_text(flags, data)
+    frame_data = parse_text(flags, data)
+    %Frame{
+      id: id,
+      data: frame_data
+    }
+  end
+
+  def parse(id, flags, data) do
+    %Frame{
+      id: id,
+      label: "#{id} is not implemented, please contribute, it's not hard.",
+      data: :not_implemented
+    }
   end
 
   def parse_text(flags, <<encoding::binary-size(1), info::binary>>) do
+    %{}
   end
 end
