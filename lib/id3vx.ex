@@ -17,15 +17,25 @@ defmodule Id3vx do
   require Logger
 
   defmodule Tag do
-    defstruct version: nil, flags: nil, size: nil, extended_header: nil, footer: nil, frames: nil
+    defstruct version: nil,
+              revision: nil,
+              flags: nil,
+              size: nil,
+              extended_header: nil,
+              footer: nil,
+              frames: nil
   end
 
   defmodule TagFlags do
     defstruct unsynchronized: nil, extended_header: nil, experimental: nil, footer: nil
   end
 
-  defmodule ExtendedHeader do
+  defmodule ExtendedHeaderV4 do
     defstruct size: nil, flag_bytes: nil, flags: nil
+  end
+
+  defmodule ExtendedHeaderV3 do
+    defstruct size: nil, flags: nil, padding: nil
   end
 
   defmodule ExtendedHeaderFlags do
@@ -47,7 +57,8 @@ defmodule Id3vx do
 
   alias Id3vx.Tag
   alias Id3vx.TagFlags
-  alias Id3vx.ExtendedHeader
+  alias Id3vx.ExtendedHeaderV4
+  alias Id3vx.ExtendedHeaderV3
   alias Id3vx.ExtendedHeaderFlags
   alias Id3vx.Frame
   alias Id3vx.FrameFlags
@@ -127,6 +138,7 @@ defmodule Id3vx do
 
   defp take_from_stream(stream, take) do
     takes = ceil(take / @stream_chunk_size)
+    IO.inspect({:take, take, :takes, takes, :total, takes * @stream_chunk_size}, label: "taking")
 
     stream
     |> Enum.take(takes)
@@ -162,39 +174,70 @@ defmodule Id3vx do
     end
   end
 
+  # TODO: For ID3v2.3 we need to unsynchronize all the bytes before parsing further
+
   defp parse_step(source, :parse_extended_header, tag) do
     {data, source} = get_bytes(source, 6)
-    ext_header = parse_extended_header_fixed(data)
+    ext_header = parse_extended_header_fixed(tag, data)
     tag = %{tag | extended_header: ext_header}
     # Implement rest of ext header parsing, for now, we pull the data
     # to get it out of the way and that's a way to just skip the extended
     # header
-    {_data, source} = get_bytes(source, ext_header.size - 6)
+    {_data, source} =
+      case tag.version do
+        # Different calculations, same results
+        4 ->
+          get_bytes(source, ext_header.size - 6)
+
+        3 ->
+          if tag.flags.unsynchronisation, do: raise("v3 unsynchronization not implemented!")
+          get_bytes(source, ext_header.size - 6)
+      end
+
     # {:parse_extended_header_flags, source, tag}
 
     {:parse_frames, source, tag}
   end
 
-  defp parse_step(source, :parse_frames, tag) do
+  defp parse_step(source, :parse_frames, %{version: 4} = tag) do
     IO.inspect(tag)
     IO.inspect(tag.flags)
     IO.inspect(tag.size, label: "pre-subtraction")
+
     frames_size =
       tag.size
       |> subtract_extended_header(tag)
       |> subtract_footer(tag)
+
     IO.inspect(frames_size, label: "post-subtraction")
 
     {data, source} = get_bytes(source, frames_size)
 
-    data =
-      if tag.flags.unsynchronized do
-        decode_unsynchronized(data)
-      else
-        data
-      end
+    frames = parse_frames(tag, data, [])
+    tag = %{tag | frames: frames}
 
-    frames = parse_frames(tag, data)
+    if tag.flags.footer do
+      {:parse_footer, source, tag}
+    else
+      {:skip_padding, source, tag}
+    end
+  end
+
+  defp parse_step(source, :parse_frames, %{version: 3} = tag) do
+    IO.inspect(tag)
+    IO.inspect(tag.flags)
+    IO.inspect(tag.size, label: "pre-subtraction")
+
+    frames_size =
+      tag.size
+      |> subtract_extended_header(tag)
+      |> subtract_footer(tag)
+
+    IO.inspect(frames_size, label: "post-subtraction")
+
+    {data, source} = get_bytes(source, frames_size)
+
+    frames = parse_frames(tag, data, [])
     tag = %{tag | frames: frames}
 
     if tag.flags.footer do
@@ -210,9 +253,8 @@ defmodule Id3vx do
   end
 
   def parse_tag(
-        <<"ID3", major::integer, minor::integer, unsynchronized::size(1),
-          extended_header::size(1), experimental::size(1), footer::size(1), _unused::size(4),
-          tag_size::binary-size(4)>>
+        <<"ID3", 4::integer, minor::integer, unsynchronized::size(1), extended_header::size(1),
+          experimental::size(1), footer::size(1), _unused::size(4), tag_size::binary-size(4)>>
       ) do
     flags = %TagFlags{
       unsynchronized: unsynchronized == 1,
@@ -223,7 +265,22 @@ defmodule Id3vx do
 
     tag_size = decode_synchsafe_integer(tag_size)
 
-    {:ok, %Tag{version: {major, minor}, flags: flags, size: tag_size}}
+    {:ok, %Tag{version: 4, revision: minor, flags: flags, size: tag_size}}
+  end
+
+  def parse_tag(
+        <<"ID3", 3::integer, minor::integer, unsynchronized::size(1), extended_header::size(1),
+          experimental::size(1), footer::size(1), _unused::size(4), tag_size::binary-size(4)>>
+      ) do
+    flags = %TagFlags{
+      unsynchronized: unsynchronized == 1,
+      extended_header: extended_header == 1,
+      experimental: experimental == 1
+    }
+
+    tag_size = decode_synchsafe_integer(tag_size)
+
+    {:ok, %Tag{version: 3, revision: minor, flags: flags, size: tag_size}}
   end
 
   def parse_tag(bin) do
@@ -231,10 +288,11 @@ defmodule Id3vx do
   end
 
   def parse_extended_header_fixed(
+        %{version: 4},
         <<size::binary-size(4), _::binary-size(1), _::size(1), is_update::size(1),
           crc_data_present::size(1), tag_restrictions::size(1), _unused::size(4)>>
       ) do
-    %ExtendedHeader{
+    %ExtendedHeaderV4{
       size: decode_synchsafe_integer(size),
       flag_bytes: 0x01,
       flags: %ExtendedHeaderFlags{
@@ -245,25 +303,43 @@ defmodule Id3vx do
     }
   end
 
-  def parse_frames(tag, frames_data, frames \\ []) do
+  def parse_extended_header_fixed(
+        %{version: 3},
+        <<size::binary-size(4), crc_data_present::1, _::15, padding_size::binary-size(4)>>
+      ) do
+    %ExtendedHeaderV3{
+      size: size,
+      flags: %ExtendedHeaderFlags{
+        crc_data_present: crc_data_present == 1
+      }
+    }
+  end
+
+  def parse_frames(%{version: 4} = tag, frames_data, frames) do
     # A tag must have at least one frame, a frame must have at least one byte
     # in it after the header
     <<id::binary-size(4), frame_size::binary-size(4), flags::binary-size(2), frames_data::binary>> =
       frames_data
 
     IO.inspect(id)
-    frame_size = decode_synchsafe_integer(frame_size)
-    flags = parse_frame_flags(flags)
+    IO.inspect(frame_size, label: "frame size before decode")
+    decoded_frame_size = decode_synchsafe_integer(frame_size)
 
-    IO.inspect({byte_size(frames_data), frame_size})
+    IO.inspect({byte_size(frames_data), decoded_frame_size})
+
     {frame_data, frames_data} =
       case frames_data do
-        <<frame_data::binary-size(frame_size)>> -> {frame_data, <<>>}
-        <<frame_data::binary-size(frame_size), rest::binary>> -> {frame_data, rest}
+        <<frame_data::binary-size(decoded_frame_size)>> -> {frame_data, <<>>}
+        <<frame_data::binary-size(decoded_frame_size), rest::binary>> -> {frame_data, rest}
       end
 
+    flags = parse_frame_flags(flags)
+    IO.inspect(flags)
+
+    IO.inspect({byte_size(frames_data), decoded_frame_size}, label: "forward!")
+
     {frames, continue?} =
-      case parse_frame(tag, id, frame_size, flags, frame_data) do
+      case parse_frame(tag, id, decoded_frame_size, flags, frame_data) do
         {:frame, frame} -> {[frame | frames], true}
         :not_found -> {frames, false}
       end
@@ -277,8 +353,55 @@ defmodule Id3vx do
       end
   end
 
+  def parse_frames(%{version: 3} = tag, frames_data, frames) do
+    # A tag must have at least one frame, a frame must have at least one byte
+    # in it after the header
+    <<id::binary-size(4), frame_size::binary-size(4), flags::binary-size(2), frames_data::binary>> =
+      frames_data
+
+    frame_size = :binary.decode_unsigned(frame_size)
+
+    IO.inspect(id)
+    IO.inspect(frame_size, label: "frame size before decode")
+
+    IO.inspect({byte_size(frames_data), frame_size})
+
+    {frames, continue?} =
+    #if byte_size(frames_data) >= frame_size do
+    if true do
+      {frame_data, frames_data} =
+        case frames_data do
+          <<frame_data::binary-size(frame_size)>> -> {frame_data, <<>>}
+          <<frame_data::binary-size(frame_size), rest::binary>> -> {frame_data, rest}
+        end
+
+      flags = parse_frame_flags(flags)
+      IO.inspect(flags)
+
+      IO.inspect({byte_size(frames_data), frame_size}, label: "forward!")
+
+        case parse_frame(tag, id, frame_size, flags, frame_data) do
+          {:frame, frame} -> {[frame | frames], true}
+          :not_found -> {frames, false}
+        end
+    else
+        Logger.warn("Frame data is less than parsed size field. Weird.")
+        {frames, false}
+    end
+
+    # Does it contain enough data for another frame?
+    frames =
+      if continue? and byte_size(frames_data) > 10 do
+        parse_frames(tag, frames_data, frames)
+      else
+        Enum.reverse(frames)
+      end
+  end
+
   def parse_frame_flags(flags) do
+    IO.inspect(flags, base: :binary)
     <<0::1, tap::1, fap::1, ro::1, 0::5, gi::1, 0::2, c::1, e::1, u::1, dli::1>> = flags
+
     %FrameFlags{
       tag_alter_preservation: tap == 1,
       file_alter_preservation: fap == 1,
@@ -289,10 +412,16 @@ defmodule Id3vx do
       unsynchronisation: u == 1,
       data_length_indicator: dli == 1
     }
-    IO.inspect(flags)
   end
 
   def parse_frame(tag, id, size, flags, data) do
+    data =
+      if tag.flags.unsynchronized do
+        decode_unsynchronized(data)
+      else
+        data
+      end
+
     frame = Frame.parse(id, flags, data)
     {:frame, %{frame | size: size, flags: flags}}
   end
@@ -316,9 +445,8 @@ defmodule Id3vx do
     size
   end
 
-  defp decode_synchsafe_integer(<<bin>>), do: bin
-
-  defp decode_synchsafe_integer(binary) do
+  def decode_synchsafe_integer(<<0::1, _::7, 0::1, _::7, 0::1, _::7, 0::1, _::7>> = binary) do
+    IO.inspect(binary, label: "decoding binary synchsafe int", base: :binary)
     # Cribbed from LiveBeats, not entirely sure how it achieves the result
     binary
     |> :binary.bin_to_list()
@@ -327,17 +455,23 @@ defmodule Id3vx do
     |> Enum.reduce(0, fn {el, index}, acc -> acc ||| el <<< (index * 7) end)
   end
 
+  #  def decode_synchsafe_integer(binary) do
+  #    :binary.decode_unsigned(binary)
+  #    |> IO.inspect(label: "decoded as unsigned")
+  #  end
+
   def decode_unsynchronized(data, decoded \\ <<>>)
 
-
   # Candidate for decoding
-  def decode_unsynchronized(<<0xff::8, 0x00::8, _::binary>> = data, decoded) do
+  def decode_unsynchronized(<<0xFF::8, 0x00::8, _::binary>> = data, decoded) do
     {sample, remainder} =
       case data do
         <<sample::binary-size(3)>> -> {sample, <<>>}
         <<sample::binary-size(3), rest::binary>> -> {sample, rest}
       end
+
     <<0xFF::8, 0x00::8, third::8>> = sample
+
     fixed =
       case third do
         <<1::3, bits::5>> ->
@@ -349,7 +483,9 @@ defmodule Id3vx do
         any ->
           <<0xFF, 0x00, any>>
       end
+
     decoded = decoded <> fixed
+
     if byte_size(remainder) == 0 do
       decoded
     else
@@ -359,12 +495,12 @@ defmodule Id3vx do
 
   # Final byte
   def decode_unsynchronized(<<byte::8>>, decoded) do
-    decoded <> byte
+    decoded <> <<byte>>
   end
 
   # No match, move one byte forward
   def decode_unsynchronized(<<byte::8, data::binary>>, decoded) do
-    decoded = decoded <> byte
+    decoded = decoded <> <<byte>>
     decode_unsynchronized(data, decoded)
   end
 end
