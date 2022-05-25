@@ -21,7 +21,11 @@ defmodule Id3vxTest do
           Enum.any?(@ok_extensions, fn e ->
             name =~ e
           end)
-          #and String.starts_with?(name, "23.")
+          and (
+            String.starts_with?(name, "beam") or
+            String.starts_with?(name, "kodsnack") or
+            String.starts_with?(name, "atp")
+          )
         end)
         |> Enum.reject(fn name ->
           Enum.any?(@errors, fn err ->
@@ -35,7 +39,24 @@ defmodule Id3vxTest do
           IO.puts(index + 1)
           IO.puts(sample)
 
-          result = assert {:ok, _} = result = Id3vx.parse_stream(path)
+          assert {:ok, tag1} = result = Id3vx.parse_file(path)
+          #assert {:ok, tag2} = result = Id3vx.parse_stream(path)
+          #assert length(tag1.frames) == length(tag2.frames)
+          tag = tag1
+
+          ts = IO.inspect(tag.size, label: "tag size")
+          fs = Enum.map(tag.frames, fn frame ->
+            frame.size + 10
+          end)
+          |> Enum.sum()
+          |> IO.inspect(label: "sum frame sizes")
+
+          (ts - fs) |> IO.inspect(label: "tag minus frame")
+
+
+          for frame <- tag.frames do
+            IO.puts(frame.id)
+          end
 
           {path, result}
         end

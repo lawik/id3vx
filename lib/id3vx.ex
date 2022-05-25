@@ -88,13 +88,19 @@ defmodule Id3vx do
     |> parse
   end
 
-  def parse_binary(<<binary>>) do
+  def parse_file(path) do
+    binary = File.read!(path)
+    parse_binary(binary)
+  end
+
+  def parse_binary(<<binary::binary>>) do
     {<<>>, binary}
     |> parse
   end
 
   def get_bytes({used, unused, %File.Stream{} = stream}, bytes) do
     left = byte_size(unused)
+    raise "Currently broken and unreliable"
 
     {taken, remainder} =
       case bytes - left do
@@ -138,7 +144,6 @@ defmodule Id3vx do
 
   defp take_from_stream(stream, take) do
     takes = ceil(take / @stream_chunk_size)
-    IO.inspect({:take, take, :takes, takes, :total, takes * @stream_chunk_size}, label: "taking")
 
     stream
     |> Enum.take(takes)
@@ -202,17 +207,13 @@ defmodule Id3vx do
   defp parse_step(source, :parse_frames, %{version: 4} = tag) do
     IO.inspect(tag)
     IO.inspect(tag.flags)
-    IO.inspect(tag.size, label: "pre-subtraction")
 
     frames_size =
       tag.size
       |> subtract_extended_header(tag)
       |> subtract_footer(tag)
 
-    IO.inspect(frames_size, label: "post-subtraction")
-
     {data, source} = get_bytes(source, frames_size)
-
     frames = parse_frames(tag, data, [])
     tag = %{tag | frames: frames}
 
@@ -226,17 +227,14 @@ defmodule Id3vx do
   defp parse_step(source, :parse_frames, %{version: 3} = tag) do
     IO.inspect(tag)
     IO.inspect(tag.flags)
-    IO.inspect(tag.size, label: "pre-subtraction")
 
     frames_size =
       tag.size
       |> subtract_extended_header(tag)
       |> subtract_footer(tag)
 
-    IO.inspect(frames_size, label: "post-subtraction")
 
     {data, source} = get_bytes(source, frames_size)
-
     frames = parse_frames(tag, data, [])
     tag = %{tag | frames: frames}
 
@@ -250,6 +248,17 @@ defmodule Id3vx do
   defp parse_step(source, step, state) do
     IO.puts("Step not implemented #{step}")
     {:done, {:ok, state}}
+  end
+
+  def find_offset(target, data, offset \\ 0) do
+    case data do
+      <<t::binary-size(4), data::binary>> when target == t ->
+        offset
+      <<_skip::binary-size(1), data::binary>> ->
+        find_offset(target, data, offset + 1)
+      "" ->
+        -1
+    end
   end
 
   def parse_tag(
@@ -268,10 +277,9 @@ defmodule Id3vx do
     {:ok, %Tag{version: 4, revision: minor, flags: flags, size: tag_size}}
   end
 
-  def parse_tag(
-        <<"ID3", 3::integer, minor::integer, unsynchronized::size(1), extended_header::size(1),
-          experimental::size(1), footer::size(1), _unused::size(4), tag_size::binary-size(4)>>
-      ) do
+  def parse_tag(<<"ID3", 3::integer, minor::integer, flag_bytes::size(8), tag_size::binary-size(4)>>) do
+    <<unsynchronized::size(1), extended_header::size(1), experimental::size(1), footer::size(1), _unused::size(4)>> = <<flag_bytes>>
+    IO.inspect(flag_bytes, label: "tag flag bits", base: :binary)
     flags = %TagFlags{
       unsynchronized: unsynchronized == 1,
       extended_header: extended_header == 1,
@@ -321,11 +329,7 @@ defmodule Id3vx do
     <<id::binary-size(4), frame_size::binary-size(4), flags::binary-size(2), frames_data::binary>> =
       frames_data
 
-    IO.inspect(id)
-    IO.inspect(frame_size, label: "frame size before decode")
     decoded_frame_size = decode_synchsafe_integer(frame_size)
-
-    IO.inspect({byte_size(frames_data), decoded_frame_size})
 
     {frame_data, frames_data} =
       case frames_data do
@@ -334,9 +338,6 @@ defmodule Id3vx do
       end
 
     flags = parse_frame_flags(flags)
-    IO.inspect(flags)
-
-    IO.inspect({byte_size(frames_data), decoded_frame_size}, label: "forward!")
 
     {frames, continue?} =
       case parse_frame(tag, id, decoded_frame_size, flags, frame_data) do
@@ -359,34 +360,34 @@ defmodule Id3vx do
     <<id::binary-size(4), frame_size::binary-size(4), flags::binary-size(2), frames_data::binary>> =
       frames_data
 
-    frame_size = :binary.decode_unsigned(frame_size)
-
+    IO.puts("==========================")
     IO.inspect(id)
-    IO.inspect(frame_size, label: "frame size before decode")
+    IO.inspect(frame_size, label: "unparsed frame size")
+    frame_size = :binary.decode_unsigned(frame_size, :big)
+    IO.inspect(frame_size, label: "frame size")
 
-    IO.inspect({byte_size(frames_data), frame_size})
+    {frames_data, frames, continue?} =
+    cond do
+    #if true do
+      not Regex.match?(~r/[A-Z0-9]{4}/, id) ->
+        Logger.warn("Invalid frame ID. Weird.")
+        {frames_data, frames, false}
+      byte_size(frames_data) < frame_size ->
+        Logger.warn("Frame data is less than parsed size field. Weird.")
+        {frames_data, frames, false}
+      true ->
+        {frame_data, frames_data} =
+          case frames_data do
+            <<frame_data::binary-size(frame_size)>> -> {frame_data, <<>>}
+            <<frame_data::binary-size(frame_size), rest::binary>> -> {frame_data, rest}
+          end
 
-    {frames, continue?} =
-    #if byte_size(frames_data) >= frame_size do
-    if true do
-      {frame_data, frames_data} =
-        case frames_data do
-          <<frame_data::binary-size(frame_size)>> -> {frame_data, <<>>}
-          <<frame_data::binary-size(frame_size), rest::binary>> -> {frame_data, rest}
-        end
-
-      flags = parse_frame_flags(flags)
-      IO.inspect(flags)
-
-      IO.inspect({byte_size(frames_data), frame_size}, label: "forward!")
+        flags = parse_frame_flags(flags)
 
         case parse_frame(tag, id, frame_size, flags, frame_data) do
-          {:frame, frame} -> {[frame | frames], true}
-          :not_found -> {frames, false}
+          {:frame, frame} -> {frames_data, [frame | frames], true}
+          :not_found -> {frames_data, frames, false}
         end
-    else
-        Logger.warn("Frame data is less than parsed size field. Weird.")
-        {frames, false}
     end
 
     # Does it contain enough data for another frame?
@@ -396,6 +397,65 @@ defmodule Id3vx do
       else
         Enum.reverse(frames)
       end
+  end
+
+  def find_next_valid_id(bytes, offset \\ 0) do
+    case bytes do
+      <<id::binary-size(4), rest::binary>> ->
+        if Regex.match?(~r/[A-Z0-9]{4}/, id) do
+          {:ok, {id, offset}}
+        else
+          <<_::binary-size(1), next::binary>> = bytes
+          find_next_valid_id(next, offset + 1)
+        end
+      _ ->
+        :not_found
+    end
+  end
+
+  def find_all_ids_offsets_and_sizes(bytes, tag_size, found \\ [], offset \\ 0) do
+    if offset >= tag_size do
+        IO.puts("done by tag size")
+        Enum.reverse(found)
+    else
+    case bytes do
+      <<id::binary-size(4), size::binary-size(4), flags::binary-size(2), rest::binary>> ->
+        if Regex.match?(~r/[A-Z0-9]{4}/, id) do
+          IO.inspect(offset, label: "offset")
+          size = :binary.decode_unsigned(size)
+          next = size + offset + 10
+          #next = offset + 10
+          find = {id, size, offset, next}
+          IO.inspect(flags, label: "flags", base: :binary)
+
+          #case found do
+          #  [{_, _, _, n} = f  | _] when n != offset ->
+          #    IO.inspect(f, label: "pre")
+          #    IO.inspect(find, label: "this")
+          #    #raise "FAIL!"
+          #  _ -> nil
+          #end
+
+          IO.puts(byte_size(rest))
+          found = [find | found]
+          IO.inspect({id, size})
+          case rest do
+            <<_skip::binary-size(size), rest::binary>> ->
+              find_all_ids_offsets_and_sizes(rest, tag_size, found, next)
+            _ ->
+              IO.puts("done, too short")
+              Enum.reverse(found)
+          end
+        else
+          <<_::binary-size(1), next::binary>> = bytes
+          find_next_valid_id(next, offset + 1)
+          find_all_ids_offsets_and_sizes(next, tag_size, found, offset+1)
+        end
+      _ ->
+        IO.puts("done")
+        Enum.reverse(found)
+    end
+    end
   end
 
   def parse_frame_flags(flags) do
@@ -415,12 +475,12 @@ defmodule Id3vx do
   end
 
   def parse_frame(tag, id, size, flags, data) do
-    data =
-      if tag.flags.unsynchronized do
-        decode_unsynchronized(data)
-      else
-        data
-      end
+    #data =
+    #  if tag.flags.unsynchronized do
+    #    decode_unsynchronized(data)
+    #  else
+    #    data
+    #  end
 
     frame = Frame.parse(id, flags, data)
     {:frame, %{frame | size: size, flags: flags}}

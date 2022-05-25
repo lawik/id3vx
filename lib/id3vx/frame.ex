@@ -111,7 +111,68 @@ defmodule Id3vx.Frame do
     }
   end
 
-  def parse_text(flags, <<encoding::binary-size(1), info::binary>>) do
-    %{}
+  def parse_text(flags, <<encoding::size(8), info::binary>>) do
+    {strings, _rest} = decode_string_sequence(encoding, byte_size(info), info)
+    %{
+      encoding: encoding,
+      text: strings
+    }
+  end
+
+  defp decode_string_sequence(encoding, max_byte_size, data, acc \\ [])
+
+  defp decode_string_sequence(_, max_byte_size, data, acc) when max_byte_size <= 0 do
+    {Enum.reverse(acc), data}
+  end
+
+  defp decode_string_sequence(encoding, max_byte_size, data, acc) do
+    {str, str_size, rest} = decode_string(encoding, max_byte_size, data)
+    decode_string_sequence(encoding, max_byte_size - str_size, rest, [str | acc])
+  end
+
+  defp convert_string(encoding, str) when encoding in [0, 3] do
+    str
+  end
+
+  defp convert_string(1, data) do
+    {encoding, bom_length} = :unicode.bom_to_encoding(data)
+    {_, string_data} = String.split_at(data, bom_length)
+    :unicode.characters_to_binary(string_data, encoding)
+  end
+
+  defp convert_string(2, data) do
+    :unicode.characters_to_binary(data, {:utf16, :big})
+  end
+
+  defp decode_string(encoding, max_byte_size, data) when encoding in [1, 2] do
+    {str, rest} = get_double_null_terminated(data, max_byte_size)
+
+    {convert_string(encoding, str), byte_size(str) + 2, rest}
+  end
+
+  defp decode_string(encoding, max_byte_size, data) when encoding in [0, 3] do
+    case :binary.split(data, <<0>>) do
+      [str, rest] when byte_size(str) + 1 <= max_byte_size ->
+        {str, byte_size(str) + 1, rest}
+
+      _ ->
+        {str, rest} = :erlang.split_binary(data, max_byte_size)
+        {str, max_byte_size, rest}
+    end
+  end
+
+  defp get_double_null_terminated(data, max_byte_size, acc \\ [])
+
+  defp get_double_null_terminated(rest, 0, acc) do
+    {acc |> Enum.reverse() |> :binary.list_to_bin(), rest}
+  end
+
+  defp get_double_null_terminated(<<0, 0, rest::binary>>, _, acc) do
+    {acc |> Enum.reverse() |> :binary.list_to_bin(), rest}
+  end
+
+  defp get_double_null_terminated(<<a::size(8), b::size(8), rest::binary>>, max_byte_size, acc) do
+    next_max_byte_size = max_byte_size - 2
+    get_double_null_terminated(rest, next_max_byte_size, [b, a | acc])
   end
 end
