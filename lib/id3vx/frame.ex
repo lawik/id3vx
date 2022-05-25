@@ -103,12 +103,79 @@ defmodule Id3vx.Frame do
     }
   end
 
+  @picture_type %{
+    0x00 => :other,
+    0x01 => :basic_file_icon,
+    0x02 => :other_file_icon,
+    0x03 => :cover,
+    0x04 => :cover_back,
+    0x05 => :leaflet_page,
+    0x06 => :media,
+    0x07 => :lead_artist,
+    0x08 => :artist,
+    0x09 => :conductor,
+    0x0a => :band,
+    0x0b => :composer,
+    0x0c => :lyricist,
+    0x0d => :recording_location,
+    0x0e => :during_recording,
+    0x0f => :during_performance,
+    0x10 => :video_capture,
+    0x11 => :a_bright_coloured_fish,
+    0x12 => :illustration,
+    0x13 => :band_logotype,
+    0x14 => :studio_logotype
+  }
+  def parse("APIC" = id, flags, data) do
+    <<encoding::size(8), rest::binary>> = data
+    {mime_type, rest} = split_at_next_null(rest)
+    <<picture_type::binary-size(1), rest::binary>> = rest
+    picture_type = @picture_type[picture_type]
+    {description, rest} =
+      case encoding do
+        0 ->
+          split_at_next_null(rest)
+        1 ->
+          {description, rest} = split_at_next_double_null(rest)
+          {convert_string(encoding, description), rest}
+      end
+
+    %Frame{
+      id: id,
+      data: %{
+          encoding: encoding,
+          mime_type: mime_type,
+          picture_type: picture_type,
+          description: description,
+          image_data: rest
+        }
+    }
+  end
+
   def parse(id, flags, data) do
     %Frame{
       id: id,
       label: "#{id} is not implemented, please contribute, it's not hard.",
-      data: :not_implemented
+      data: %{status: :not_implemented, raw_data: data}
     }
+  end
+
+  defp split_at_next_null(data, acc \\ <<>>) do
+    case data do
+      <<0x00::size(8), data::binary>> ->
+        {acc, data}
+      <<byte::binary-size(1), data::binary>> ->
+        split_at_next_null(data, acc <> byte)
+    end
+  end
+
+  defp split_at_next_double_null(data, acc \\ <<>>) do
+    case data do
+      <<0x00::size(8), 0x00::size(8), data::binary>> ->
+        {acc, data}
+      <<byte::binary-size(1), data::binary>> ->
+        split_at_next_double_null(data, acc <> byte)
+    end
   end
 
   def parse_text(flags, <<encoding::size(8), info::binary>>) do
