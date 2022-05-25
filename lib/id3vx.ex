@@ -137,6 +137,7 @@ defmodule Id3vx do
           get_bytes(source, ext_header.size - 6)
       end
 
+    # TODO: Actually handle the extended header
     # {:parse_extended_header_flags, source, tag}
 
     {:parse_frames, source, tag}
@@ -217,7 +218,9 @@ defmodule Id3vx do
 
   def parse_tag(<<"ID3", 3::integer, minor::integer, flag_bytes::size(8), tag_size::binary-size(4)>>) do
     <<unsynchronized::size(1), extended_header::size(1), experimental::size(1), footer::size(1), _unused::size(4)>> = <<flag_bytes>>
+
     IO.inspect(flag_bytes, label: "tag flag bits", base: :binary)
+
     flags = %TagFlags{
       unsynchronized: unsynchronized == 1,
       extended_header: extended_header == 1,
@@ -306,7 +309,6 @@ defmodule Id3vx do
 
     {frames_data, frames, continue?} =
     cond do
-    #if true do
       not Regex.match?(~r/[A-Z0-9]{4}/, id) ->
         Logger.warn("Invalid frame ID. Weird.")
         {frames_data, frames, false}
@@ -323,7 +325,9 @@ defmodule Id3vx do
         flags = parse_frame_flags(flags)
 
         case parse_frame(tag, id, frame_size, flags, frame_data) do
-          {:frame, frame} -> {frames_data, [frame | frames], true}
+          {:frame, frame} ->
+            IO.inspect(frame, label: "frame")
+            {frames_data, [frame | frames], true}
           :not_found -> {frames_data, frames, false}
         end
     end
