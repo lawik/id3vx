@@ -75,19 +75,6 @@ defmodule Id3vx do
     :done
   ]
 
-  # parse tag header, get flags
-  # handle flags:
-  #   if extended headerparse extended header
-  #
-
-  @stream_chunk_size 2048
-  def parse_stream(path) do
-    stream = File.stream!(path, [:raw], @stream_chunk_size)
-
-    {<<>>, <<>>, stream}
-    |> parse
-  end
-
   def parse_file(path) do
     binary = File.read!(path)
     parse_binary(binary)
@@ -98,58 +85,9 @@ defmodule Id3vx do
     |> parse
   end
 
-  def get_bytes({used, unused, %File.Stream{} = stream}, bytes) do
-    left = byte_size(unused)
-    raise "Currently broken and unreliable"
-
-    {taken, remainder} =
-      case bytes - left do
-        take when take > 0 ->
-          gotten = take_from_stream(stream, take)
-
-          {data, rest} =
-            case gotten do
-              <<data::binary-size(take), rest::binary>> ->
-                {data, rest}
-
-              <<data::binary-size(take)>> ->
-                {data, <<>>}
-
-              <<data::binary>> ->
-                Logger.error(
-                  "Tried to take #{take} bytes but source only provided #{byte_size(data)}."
-                )
-
-                {data, <<>>}
-            end
-
-          {unused <> data, rest}
-
-        take when take == 0 ->
-          rest = take_from_stream(stream, take)
-          {unused, rest}
-
-        take when take < 0 ->
-          <<data::binary-size(bytes), rest::binary>> = unused
-          {data, rest}
-      end
-
-    {taken, {used <> taken, remainder, stream}}
-  end
-
   def get_bytes({used, unused}, bytes) do
     <<data::binary-size(bytes), rest::binary>> = unused
     {data, {used <> data, rest}}
-  end
-
-  defp take_from_stream(stream, take) do
-    takes = ceil(take / @stream_chunk_size)
-
-    stream
-    |> Enum.take(takes)
-    |> Enum.reduce(<<>>, fn got, acc ->
-      acc <> got
-    end)
   end
 
   def parse(source) do

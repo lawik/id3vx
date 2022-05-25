@@ -119,6 +119,10 @@ defmodule Id3vx.Frame do
     }
   end
 
+  # TODO: All this text parsing was ripped from live_beats and I
+  #       don't find it very easy to follow. Tons of stuff around
+  #       null terminations and so on. See if it makes sense to rework
+  #       or if it can be made easier to follow
   defp decode_string_sequence(encoding, max_byte_size, data, acc \\ [])
 
   defp decode_string_sequence(_, max_byte_size, data, acc) when max_byte_size <= 0 do
