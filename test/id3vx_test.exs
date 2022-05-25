@@ -40,6 +40,7 @@ defmodule Id3vxTest do
           IO.puts(sample)
 
           assert {:ok, tag1} = result = Id3vx.parse_file(path)
+          IO.inspect(Id3vx.get_tag_binary(File.read!(path)))
           #assert {:ok, tag2} = result = Id3vx.parse_stream(path)
           #assert length(tag1.frames) == length(tag2.frames)
           tag = tag1

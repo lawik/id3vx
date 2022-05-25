@@ -85,6 +85,18 @@ defmodule Id3vx do
     |> parse
   end
 
+  def get_tag_binary(<<binary::binary>>) do
+    <<header::binary-size(10), rest::binary>> = binary
+    {:ok, tag} = parse_tag(header)
+    tag_size = tag.size
+    <<body::binary-size(tag_size),_::binary>> = rest
+    header <> body
+  end
+
+  def tag_to_binary(%Tag{version: 3} = tag) do
+    raise "not implemented"
+  end
+
   def get_bytes({used, unused}, bytes) do
     <<data::binary-size(bytes), rest::binary>> = unused
     {data, {used <> data, rest}}
