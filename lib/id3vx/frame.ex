@@ -95,6 +95,19 @@ defmodule Id3vx.Frame do
 
   alias Id3vx.Frame
 
+  def encode_frame(%Frame{id: "T" <> _} = frame, %{version: 3}) do
+    data =
+    case frame.encoding do
+      0 ->
+        Enum.reduce(frame.data.text, <<>>, fn string, acc ->
+          acc <> string <> <<0x00>>
+        end)
+      1 -> raise "unicode string encoding not implemented"
+    end
+    flags = <<0x00, 0x00>>
+    frame_size = byte_size(data)
+  end
+
   def parse("T" <> _ = id, flags, data) do
     frame_data = parse_text(flags, data)
     %Frame{

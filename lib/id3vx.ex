@@ -94,7 +94,19 @@ defmodule Id3vx do
   end
 
   def tag_to_binary(%Tag{version: 3} = tag) do
-    raise "not implemented"
+    frames_binary = tag.frames
+                    |> encode_frames()
+  end
+
+  def encode_frames(%Tag{frames: []}) do
+    # TODO: proper error
+    raise "Cannot generate an empty ID3 tag"
+  end
+
+  def encode_frames(%Tag{frames: frames} = tag) do
+    Enum.reduce(frames, <<>>, fn frame, acc ->
+      acc <> Frame.encode_frame(frame, tag)
+    end)
   end
 
   def get_bytes({used, unused}, bytes) do
