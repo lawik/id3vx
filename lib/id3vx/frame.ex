@@ -88,28 +88,33 @@ defmodule Id3vx.Frame do
   """
 
   defstruct id: nil,
-    size: nil,
-    flags: nil,
-    label: nil, # "Payment", "Album sort order", "Title/songname/content description"
-    data: nil
+            size: nil,
+            flags: nil,
+            # "Payment", "Album sort order", "Title/songname/content description"
+            label: nil,
+            data: nil
 
   alias Id3vx.Frame
 
   def encode_frame(%Frame{id: "T" <> _} = frame, %{version: 3}) do
     data =
-    case frame.encoding do
-      0 ->
-        Enum.reduce(frame.data.text, <<>>, fn string, acc ->
-          acc <> string <> <<0x00>>
-        end)
-      1 -> raise "unicode string encoding not implemented"
-    end
+      case frame.encoding do
+        0 ->
+          Enum.reduce(frame.data.text, <<>>, fn string, acc ->
+            acc <> string <> <<0x00>>
+          end)
+
+        1 ->
+          raise "unicode string encoding not implemented"
+      end
+
     flags = <<0x00, 0x00>>
     frame_size = byte_size(data)
   end
 
   def parse("T" <> _ = id, flags, data) do
     frame_data = parse_text(flags, data)
+
     %Frame{
       id: id,
       data: frame_data
@@ -127,12 +132,12 @@ defmodule Id3vx.Frame do
     0x07 => :lead_artist,
     0x08 => :artist,
     0x09 => :conductor,
-    0x0a => :band,
-    0x0b => :composer,
-    0x0c => :lyricist,
-    0x0d => :recording_location,
-    0x0e => :during_recording,
-    0x0f => :during_performance,
+    0x0A => :band,
+    0x0B => :composer,
+    0x0C => :lyricist,
+    0x0D => :recording_location,
+    0x0E => :during_recording,
+    0x0F => :during_performance,
     0x10 => :video_capture,
     0x11 => :a_bright_coloured_fish,
     0x12 => :illustration,
@@ -144,10 +149,12 @@ defmodule Id3vx.Frame do
     {mime_type, rest} = split_at_next_null(rest)
     <<picture_type::binary-size(1), rest::binary>> = rest
     picture_type = @picture_type[picture_type]
+
     {description, rest} =
       case encoding do
         0 ->
           split_at_next_null(rest)
+
         1 ->
           {description, rest} = split_at_next_double_null(rest)
           {convert_string(encoding, description), rest}
@@ -156,12 +163,12 @@ defmodule Id3vx.Frame do
     %Frame{
       id: id,
       data: %{
-          encoding: encoding,
-          mime_type: mime_type,
-          picture_type: picture_type,
-          description: description,
-          image_data: rest
-        }
+        encoding: encoding,
+        mime_type: mime_type,
+        picture_type: picture_type,
+        description: description,
+        image_data: rest
+      }
     }
   end
 
@@ -177,6 +184,7 @@ defmodule Id3vx.Frame do
     case data do
       <<0x00::size(8), data::binary>> ->
         {acc, data}
+
       <<byte::binary-size(1), data::binary>> ->
         split_at_next_null(data, acc <> byte)
     end
@@ -186,6 +194,7 @@ defmodule Id3vx.Frame do
     case data do
       <<0x00::size(8), 0x00::size(8), data::binary>> ->
         {acc, data}
+
       <<byte::binary-size(1), data::binary>> ->
         split_at_next_double_null(data, acc <> byte)
     end
@@ -193,6 +202,7 @@ defmodule Id3vx.Frame do
 
   def parse_text(flags, <<encoding::size(8), info::binary>>) do
     {strings, _rest} = decode_string_sequence(encoding, byte_size(info), info)
+
     %{
       encoding: encoding,
       text: strings
