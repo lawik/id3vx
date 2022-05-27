@@ -11,6 +11,6 @@ defmodule Id3vx.Frame.ApicTest do
                mime_type: "image/jpg",
                picture_type: :other
              }
-           } = Frame.parse("APIC", nil, binary)
+           } = Frame.parse("APIC", nil, nil, binary)
   end
 end

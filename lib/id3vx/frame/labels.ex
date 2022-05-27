@@ -65,6 +65,7 @@ defmodule Id3vx.Frame.Labels do
     "MCDI" => "Music CD identifier",
     "TDEN" => "Encoding time",
     "WCOP" => "Copyright/Legal information",
+    "CHAP" => "Chapters",
     "USER" => "Terms of use",
     "WCOM" => "Commercial information",
     "EQU2" => "Equalisation (2)",

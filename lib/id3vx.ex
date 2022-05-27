@@ -186,7 +186,7 @@ defmodule Id3vx do
         data
       end
 
-    frames = parse_frames(tag, data, [])
+    frames = parse_frames(tag, data)
     tag = %{tag | frames: frames}
 
     if tag.flags.footer do
@@ -291,6 +291,8 @@ defmodule Id3vx do
     }
   end
 
+  def parse_frames(tag, frames_data, frames \\ [])
+
   def parse_frames(%{version: 4} = tag, frames_data, frames) do
     # A tag must have at least one frame, a frame must have at least one byte
     # in it after the header
@@ -380,12 +382,12 @@ defmodule Id3vx do
     }
   end
 
-  def parse_frame(%{version: 3} = _tag, id, size, flags, data) do
-    frame = Frame.parse(id, flags, data)
+  def parse_frame(%{version: 3} = tag, id, size, flags, data) do
+    frame = Frame.parse(id, tag, flags, data)
     {:frame, %{frame | size: size, flags: flags, label: Labels.from_id(frame.id)}}
   end
 
-  def parse_frame(%Tag{version: 4} = _tag, id, size, flags, data) do
+  def parse_frame(%Tag{version: 4} = tag, id, size, flags, data) do
     data =
       if flags.unsynchronisation do
         decode_unsynchronized(data)
@@ -393,7 +395,7 @@ defmodule Id3vx do
         data
       end
 
-    frame = Frame.parse(id, flags, data)
+    frame = Frame.parse(id, tag, flags, data)
     {:frame, %{frame | size: size, flags: flags}}
   end
 

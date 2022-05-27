@@ -95,6 +95,7 @@ defmodule Id3vx.Frame do
             data: nil
 
   alias Id3vx.Frame
+  alias Id3vx.Tag
 
   def encode_frame(%Frame{id: "T" <> _} = frame, %{version: 3}) do
     data =
@@ -118,14 +119,16 @@ defmodule Id3vx.Frame do
     0x02 => :utf16be,
     0x03 => :utf8
   }
-  def parse("T" <> _ = id, flags, data) do
+  def parse("T" <> _ = id, %Tag{version: 3}, flags, data) do
     <<encoding::size(8), data::binary>> = data
     encoding = @text_encoding[encoding]
-    frame_data = parse_encoded_text(encoding, data)
+    %{text: text} = frame_data = parse_encoded_text(encoding, data)
+    # Ignore any extra text pieces, according to spec
+    [text | []] = text
 
     %Frame{
       id: id,
-      data: frame_data
+      data: %{encoding: encoding, text: text}
     }
   end
 
@@ -152,21 +155,15 @@ defmodule Id3vx.Frame do
     0x13 => :band_logotype,
     0x14 => :studio_logotype
   }
-  def parse("APIC" = id, _flags, data) do
+  def parse("APIC" = id, _tag, flags, data) do
     <<encoding::size(8), rest::binary>> = data
     {mime_type, rest} = split_at_next_null(rest)
     <<picture_type::size(8), rest::binary>> = rest
     picture_type = @picture_type[picture_type]
 
-    {description, rest} =
-      case encoding do
-        0 ->
-          split_at_next_null(rest)
-
-        1 ->
-          {description, rest} = split_at_next_double_null(rest)
-          {convert_string(encoding, description), rest}
-      end
+    encoding = @text_encoding[encoding]
+    {description, rest} = split_at_null(encoding, rest)
+    description = convert_string(encoding, description)
 
     %Frame{
       id: id,
@@ -180,28 +177,36 @@ defmodule Id3vx.Frame do
     }
   end
 
-  def parse("COMM" = id, _flags, data) do
-    <<encoding::size(8), language::binary-size(2), data::binary>> = data
+  def parse("CHAP" = id, tag, _flags, data) do
+    {element_id, data} = split_at_next_null(data)
+
+    <<start_time::size(32), end_time::size(32), start_offset::size(32), end_offset::size(32),
+      sub_frames_data::binary>> = data
+
+    sub_frames = Id3vx.parse_frames(tag, sub_frames_data)
+
+    %Frame{
+      id: id,
+      data: %{
+        element_id: element_id,
+        start_time: start_time,
+        end_time: end_time,
+        start_offset: start_offset,
+        end_offset: end_offset,
+        frames: sub_frames
+      }
+    }
+  end
+
+  def parse("COMM" = id, %Tag{version: 3}, _flags, data) do
+    <<encoding::size(8), language::binary-size(3), data::binary>> = data
     encoding = @text_encoding[encoding]
 
-    {description, rest} =
-      case encoding do
-        :iso8859_1 ->
-          split_at_next_null(data)
-
-        :utf8 ->
-          split_at_next_null(data)
-
-        :utf16 ->
-          {description, rest} = split_at_next_double_null(data)
-          {convert_string(encoding, description), rest}
-
-        :utf16_be ->
-          {description, rest} = split_at_next_double_null(data)
-          {convert_string(encoding, description), rest}
-      end
-
-    %{text: text} = parse_encoded_text(encoding, rest)
+    %{text: text_parts} = parse_encoded_text(encoding, data)
+    # This construction makes it ignore any extra termination which
+    # is according to spec and resilient to issue
+    # The Podcast Chapters app produces some odd COMM fields
+    [description | [text | _]] = text_parts
 
     %Frame{
       id: id,
@@ -214,7 +219,27 @@ defmodule Id3vx.Frame do
     }
   end
 
-  def parse(id, _flags, data) do
+  def parse("WXXX" = id, _tag, _flags, data) do
+    <<encoding::size(8), data::binary>> = data
+    encoding = @text_encoding[encoding]
+
+    # I've seen double null leading here, not sure why
+    {description, rest} = split_at_a_null_or_two(data)
+    description = convert_string(encoding, description)
+
+    %{text: [url]} = parse_encoded_text(:iso8859_1, rest)
+
+    %Frame{
+      id: id,
+      data: %{
+        encoding: encoding,
+        description: description,
+        url: url
+      }
+    }
+  end
+
+  def parse(id, _tag, _flags, data) do
     %Frame{
       id: id,
       label: "#{id} is not implemented, please contribute, it's not hard.",
@@ -222,24 +247,42 @@ defmodule Id3vx.Frame do
     }
   end
 
-  defp split_at_next_null(data, acc \\ <<>>) do
-    case data do
-      <<0x00::size(8), data::binary>> ->
-        {acc, data}
+  defp split_at_a_null_or_two(data) do
+    {first, rest} = split_at_next_null(data)
 
-      <<byte::binary-size(1), data::binary>> ->
-        split_at_next_null(data, acc <> byte)
+    rest =
+      case rest do
+        <<0::size(8), rest::binary>> -> rest
+        rest -> rest
+      end
+
+    {first, rest}
+  end
+
+  defp split_at_null(encoding, data) do
+    case encoding do
+      :iso8859_1 ->
+        split_at_next_null(data)
+
+      :utf8 ->
+        split_at_next_null(data)
+
+      :utf16 ->
+        split_at_next_double_null(data)
+
+      :utf16_be ->
+        split_at_next_double_null(data)
     end
   end
 
-  defp split_at_next_double_null(data, acc \\ <<>>) do
-    case data do
-      <<0x00::size(8), 0x00::size(8), data::binary>> ->
-        {acc, data}
+  defp split_at_next_null(data) do
+    [pre, post] = :binary.split(data, <<0>>)
+    {pre, post}
+  end
 
-      <<byte::binary-size(1), data::binary>> ->
-        split_at_next_double_null(data, acc <> byte)
-    end
+  defp split_at_next_double_null(data, acc \\ <<>>) do
+    [pre, post] = :binary.split(data, <<0, 0>>)
+    {pre, post}
   end
 
   def parse_encoded_text(encoding, data) do

@@ -1,6 +1,7 @@
 AENC Audio encryption
 APIC Attached picture
 ASPI Audio seek point index
+CHAP Chapters
 COMM Comments
 COMR Commercial frame
 ENCR Encryption method registration
