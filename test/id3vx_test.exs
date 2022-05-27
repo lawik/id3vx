@@ -46,6 +46,7 @@ defmodule Id3vxTest do
 
   test "atp483.mp3 parses ok" do
     assert {:ok, tag} = Id3vx.parse_file(Path.join(@samples_path, "atp483.mp3"))
+    IO.inspect(tag)
 
     assert %Id3vx.Tag{
              extended_header: nil,
@@ -91,7 +92,30 @@ defmodule Id3vxTest do
                },
                %Id3vx.Frame{
                  data: %{
-                   status: :not_implemented
+                   element_id: "toc",
+                   frames: [],
+                   ordered: true,
+                   top_level: true,
+                   child_elements: [
+                     "chp0",
+                     "chp1",
+                     "chp2",
+                     "chp3",
+                     "chp4",
+                     "chp5",
+                     "chp6",
+                     "chp7",
+                     "chp8",
+                     "chp9",
+                     "chp10",
+                     "chp11",
+                     "chp12",
+                     "chp13",
+                     "chp14",
+                     "chp15",
+                     "chp16",
+                     "chp17"
+                   ]
                  },
                  id: "CTOC",
                  label: nil

@@ -119,10 +119,10 @@ defmodule Id3vx.Frame do
     0x02 => :utf16be,
     0x03 => :utf8
   }
-  def parse("T" <> _ = id, %Tag{version: 3}, flags, data) do
+  def parse("T" <> _ = id, %Tag{version: 3}, _flags, data) do
     <<encoding::size(8), data::binary>> = data
     encoding = @text_encoding[encoding]
-    %{text: text} = frame_data = parse_encoded_text(encoding, data)
+    %{text: text} = parse_encoded_text(encoding, data)
     # Ignore any extra text pieces, according to spec
     [text | []] = text
 
@@ -155,7 +155,7 @@ defmodule Id3vx.Frame do
     0x13 => :band_logotype,
     0x14 => :studio_logotype
   }
-  def parse("APIC" = id, _tag, flags, data) do
+  def parse("APIC" = id, _tag, _flags, data) do
     <<encoding::size(8), rest::binary>> = data
     {mime_type, rest} = split_at_next_null(rest)
     <<picture_type::size(8), rest::binary>> = rest
@@ -193,6 +193,39 @@ defmodule Id3vx.Frame do
         end_time: end_time,
         start_offset: start_offset,
         end_offset: end_offset,
+        frames: sub_frames
+      }
+    }
+  end
+
+  def parse("CTOC" = id, tag, _flags, data) do
+    {element_id, data} = split_at_next_null(data)
+
+    <<_unused_flags::size(6), top_level::size(1), ordered::size(1), entry_count::size(8),
+      rest::binary>> = data
+
+    {ids_reversed, rest} =
+      Enum.reduce(1..entry_count, {[], rest}, fn _, {ids, rest} ->
+        {child_element_id, rest} = split_at_next_null(rest)
+        {[child_element_id | ids], rest}
+      end)
+
+    child_element_ids = Enum.reverse(ids_reversed)
+
+    sub_frames =
+      if byte_size(rest) > 0 do
+        Id3vx.parse_frames(tag, rest)
+      else
+        []
+      end
+
+    %Frame{
+      id: id,
+      data: %{
+        element_id: element_id,
+        top_level: top_level == 1,
+        ordered: ordered == 1,
+        child_elements: child_element_ids,
         frames: sub_frames
       }
     }
@@ -280,7 +313,7 @@ defmodule Id3vx.Frame do
     {pre, post}
   end
 
-  defp split_at_next_double_null(data, acc \\ <<>>) do
+  defp split_at_next_double_null(data) do
     [pre, post] = :binary.split(data, <<0, 0>>)
     {pre, post}
   end
