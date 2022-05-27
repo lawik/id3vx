@@ -98,7 +98,7 @@ defmodule Id3vx.Frame do
 
   def encode_frame(%Frame{id: "T" <> _} = frame, %{version: 3}) do
     data =
-      case frame.encoding do
+      case frame.data.encoding do
         0 ->
           Enum.reduce(frame.data.text, <<>>, fn string, acc ->
             acc <> string <> <<0x00>>
@@ -144,7 +144,7 @@ defmodule Id3vx.Frame do
     0x13 => :band_logotype,
     0x14 => :studio_logotype
   }
-  def parse("APIC" = id, flags, data) do
+  def parse("APIC" = id, _flags, data) do
     <<encoding::size(8), rest::binary>> = data
     {mime_type, rest} = split_at_next_null(rest)
     <<picture_type::binary-size(1), rest::binary>> = rest
@@ -172,7 +172,7 @@ defmodule Id3vx.Frame do
     }
   end
 
-  def parse(id, flags, data) do
+  def parse(id, _flags, data) do
     %Frame{
       id: id,
       label: "#{id} is not implemented, please contribute, it's not hard.",
@@ -200,7 +200,7 @@ defmodule Id3vx.Frame do
     end
   end
 
-  def parse_text(flags, <<encoding::size(8), info::binary>>) do
+  def parse_text(_flags, <<encoding::size(8), info::binary>>) do
     {strings, _rest} = decode_string_sequence(encoding, byte_size(info), info)
 
     %{

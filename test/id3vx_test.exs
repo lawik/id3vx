@@ -1,6 +1,7 @@
 defmodule Id3vxTest do
   use ExUnit.Case
   # doctest Id3vx
+  require Logger
 
   @samples_path "test/samples"
   setup_all do
@@ -31,18 +32,23 @@ defmodule Id3vxTest do
 
   test "parse samples", %{ok_files: ok_files} do
     for path <- ok_files do
-      assert {:ok, tag} = result = Id3vx.parse_file(path)
-      IO.inspect(tag)
+      assert {:ok, tag} = Id3vx.parse_file(path)
+
+      for frame <- tag.frames do
+        if frame.data[:status] == :not_implemented do
+          Logger.warn("Frame not implemented '#{frame.id}' in #{path}.")
+        end
+      end
     end
   end
 
   test "beamradio32.mp3 parses ok" do
-    assert {:ok, tag} = result = Id3vx.parse_file(Path.join(@samples_path, "beamradio32.mp3"))
+    assert {:ok, tag} = Id3vx.parse_file(Path.join(@samples_path, "beamradio32.mp3"))
 
     assert %Id3vx.Tag{
              flags: %Id3vx.TagFlags{
                extended_header: false,
-               unsynchronized: false
+               unsynchronisation: false
              },
              frames: [
                %Id3vx.Frame{
