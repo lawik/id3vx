@@ -119,7 +119,9 @@ defmodule Id3vx.Frame do
     0x03 => :utf8
   }
   def parse("T" <> _ = id, flags, data) do
-    frame_data = parse_text(flags, data)
+    <<encoding::size(8), data::binary>> = data
+    encoding = @text_encoding[encoding]
+    frame_data = parse_encoded_text(encoding, data)
 
     %Frame{
       id: id,
@@ -178,7 +180,39 @@ defmodule Id3vx.Frame do
     }
   end
 
-  # def parse("COMM" = id)
+  def parse("COMM" = id, _flags, data) do
+    <<encoding::size(8), language::binary-size(2), data::binary>> = data
+    encoding = @text_encoding[encoding]
+
+    {description, rest} =
+      case encoding do
+        :iso8859_1 ->
+          split_at_next_null(data)
+
+        :utf8 ->
+          split_at_next_null(data)
+
+        :utf16 ->
+          {description, rest} = split_at_next_double_null(data)
+          {convert_string(encoding, description), rest}
+
+        :utf16_be ->
+          {description, rest} = split_at_next_double_null(data)
+          {convert_string(encoding, description), rest}
+      end
+
+    %{text: text} = parse_encoded_text(encoding, rest)
+
+    %Frame{
+      id: id,
+      data: %{
+        encoding: encoding,
+        language: language,
+        description: description,
+        text: text
+      }
+    }
+  end
 
   def parse(id, _flags, data) do
     %Frame{
@@ -208,9 +242,8 @@ defmodule Id3vx.Frame do
     end
   end
 
-  def parse_text(_flags, <<encoding::size(8), info::binary>>) do
-    encoding = @text_encoding[encoding]
-    {strings, _rest} = decode_string_sequence(encoding, byte_size(info), info)
+  def parse_encoded_text(encoding, data) do
+    {strings, _rest} = decode_string_sequence(encoding, byte_size(data), data)
 
     %{
       encoding: encoding,
