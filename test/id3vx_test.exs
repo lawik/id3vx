@@ -46,7 +46,6 @@ defmodule Id3vxTest do
 
   test "atp483.mp3 parses ok" do
     assert {:ok, tag} = Id3vx.parse_file(Path.join(@samples_path, "atp483.mp3"))
-    IO.inspect(tag)
 
     assert %Id3vx.Tag{
              extended_header: nil,
@@ -640,6 +639,7 @@ defmodule Id3vxTest do
                  id: "TYER"
                },
                %Id3vx.Frame{
+                 data: %{url: "https://www.beamrad.io/rss"},
                  id: "WFED"
                },
                %Id3vx.Frame{

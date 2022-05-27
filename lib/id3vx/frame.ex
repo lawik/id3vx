@@ -119,18 +119,6 @@ defmodule Id3vx.Frame do
     0x02 => :utf16be,
     0x03 => :utf8
   }
-  def parse("T" <> _ = id, %Tag{version: 3}, _flags, data) do
-    <<encoding::size(8), data::binary>> = data
-    encoding = @text_encoding[encoding]
-    %{text: text} = parse_encoded_text(encoding, data)
-    # Ignore any extra text pieces, according to spec
-    [text | []] = text
-
-    %Frame{
-      id: id,
-      data: %{encoding: encoding, text: text}
-    }
-  end
 
   @picture_type %{
     0x00 => :other,
@@ -252,6 +240,28 @@ defmodule Id3vx.Frame do
     }
   end
 
+  def parse("PCST" = id, _tag, _flags, data) do
+    %Frame{
+      id: id,
+      data: %{
+        purpose: "iTunes extension, if present indicates that this is a podcast."
+      }
+    }
+  end
+
+  def parse("T" <> _ = id, %Tag{version: 3}, _flags, data) do
+    <<encoding::size(8), data::binary>> = data
+    encoding = @text_encoding[encoding]
+    %{text: text} = parse_encoded_text(encoding, data)
+    # Ignore any extra text pieces, according to spec
+    [text | []] = text
+
+    %Frame{
+      id: id,
+      data: %{encoding: encoding, text: text}
+    }
+  end
+
   def parse("WXXX" = id, _tag, _flags, data) do
     <<encoding::size(8), data::binary>> = data
     encoding = @text_encoding[encoding]
@@ -267,6 +277,24 @@ defmodule Id3vx.Frame do
       data: %{
         encoding: encoding,
         description: description,
+        url: url
+      }
+    }
+  end
+
+  def parse("W" <> _ = id, _tag, _flags, data) do
+    %{text: pieces} = parse_encoded_text(:iso8859_1, data)
+
+    # If there is a leading null, skip it
+    url =
+      case pieces do
+        ["" | [url | _]] -> url
+        [url | _] -> url
+      end
+
+    %Frame{
+      id: id,
+      data: %{
         url: url
       }
     }
