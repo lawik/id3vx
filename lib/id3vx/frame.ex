@@ -112,6 +112,12 @@ defmodule Id3vx.Frame do
     frame_size = byte_size(data)
   end
 
+  @text_encoding %{
+    0x00 => :iso8859_1,
+    0x01 => :utf16,
+    0x02 => :utf16be,
+    0x03 => :utf8
+  }
   def parse("T" <> _ = id, flags, data) do
     frame_data = parse_text(flags, data)
 
@@ -147,7 +153,7 @@ defmodule Id3vx.Frame do
   def parse("APIC" = id, _flags, data) do
     <<encoding::size(8), rest::binary>> = data
     {mime_type, rest} = split_at_next_null(rest)
-    <<picture_type::binary-size(1), rest::binary>> = rest
+    <<picture_type::size(8), rest::binary>> = rest
     picture_type = @picture_type[picture_type]
 
     {description, rest} =
@@ -201,6 +207,7 @@ defmodule Id3vx.Frame do
   end
 
   def parse_text(_flags, <<encoding::size(8), info::binary>>) do
+    encoding = @text_encoding[encoding]
     {strings, _rest} = decode_string_sequence(encoding, byte_size(info), info)
 
     %{
@@ -209,42 +216,26 @@ defmodule Id3vx.Frame do
     }
   end
 
-  # TODO: All this text parsing was ripped from live_beats and I
-  #       don't find it very easy to follow. Tons of stuff around
-  #       null terminations and so on. See if it makes sense to rework
-  #       or if it can be made easier to follow
   defp decode_string_sequence(encoding, max_byte_size, data, acc \\ [])
 
+  # Out of data, clean up and return
   defp decode_string_sequence(_, max_byte_size, data, acc) when max_byte_size <= 0 do
     {Enum.reverse(acc), data}
   end
 
+  # decode_string and recurse
   defp decode_string_sequence(encoding, max_byte_size, data, acc) do
     {str, str_size, rest} = decode_string(encoding, max_byte_size, data)
     decode_string_sequence(encoding, max_byte_size - str_size, rest, [str | acc])
   end
 
-  defp convert_string(encoding, str) when encoding in [0, 3] do
-    str
-  end
-
-  defp convert_string(1, data) do
-    {encoding, bom_length} = :unicode.bom_to_encoding(data)
-    {_, string_data} = String.split_at(data, bom_length)
-    :unicode.characters_to_binary(string_data, encoding)
-  end
-
-  defp convert_string(2, data) do
-    :unicode.characters_to_binary(data, {:utf16, :big})
-  end
-
-  defp decode_string(encoding, max_byte_size, data) when encoding in [1, 2] do
+  defp decode_string(encoding, max_byte_size, data) when encoding in [:utf16, :utf16be] do
     {str, rest} = get_double_null_terminated(data, max_byte_size)
 
     {convert_string(encoding, str), byte_size(str) + 2, rest}
   end
 
-  defp decode_string(encoding, max_byte_size, data) when encoding in [0, 3] do
+  defp decode_string(encoding, max_byte_size, data) when encoding in [:iso8859_1, :utf8] do
     case :binary.split(data, <<0>>) do
       [str, rest] when byte_size(str) + 1 <= max_byte_size ->
         {str, byte_size(str) + 1, rest}
@@ -253,6 +244,20 @@ defmodule Id3vx.Frame do
         {str, rest} = :erlang.split_binary(data, max_byte_size)
         {str, max_byte_size, rest}
     end
+  end
+
+  defp convert_string(encoding, str) when encoding in [:iso8859_1, :utf8] do
+    str
+  end
+
+  defp convert_string(:utf16, data) do
+    {encoding, bom_length} = :unicode.bom_to_encoding(data)
+    {_, string_data} = String.split_at(data, bom_length)
+    :unicode.characters_to_binary(string_data, encoding)
+  end
+
+  defp convert_string(:utf16be, data) do
+    :unicode.characters_to_binary(data, {:utf16, :big})
   end
 
   defp get_double_null_terminated(data, max_byte_size, acc \\ [])
