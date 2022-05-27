@@ -62,6 +62,7 @@ defmodule Id3vx do
   alias Id3vx.ExtendedHeaderFlags
   alias Id3vx.Frame
   alias Id3vx.FrameFlags
+  alias Id3vx.Frame.Labels
 
   @parse_states [
     :parse_prepend_tag,
@@ -381,7 +382,7 @@ defmodule Id3vx do
 
   def parse_frame(%{version: 3} = _tag, id, size, flags, data) do
     frame = Frame.parse(id, flags, data)
-    {:frame, %{frame | size: size, flags: flags}}
+    {:frame, %{frame | size: size, flags: flags, label: Labels.from_id(frame.id)}}
   end
 
   def parse_frame(%Tag{version: 4} = _tag, id, size, flags, data) do

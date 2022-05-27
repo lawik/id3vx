@@ -52,19 +52,19 @@ defmodule Id3vxTest do
              },
              frames: [
                %Id3vx.Frame{
-                 data: %{encoding: 1, text: ["Maggie Tate"]},
+                 data: %{encoding: :utf16, text: ["Maggie Tate"]},
                  id: "TCOM"
                },
                %Id3vx.Frame{
-                 data: %{encoding: 1, text: ["This video is about April 20"]},
+                 data: %{encoding: :utf16, text: ["This video is about April 20"]},
                  id: "TIT1"
                },
                %Id3vx.Frame{
-                 data: %{encoding: 1, text: ["April 20"]},
+                 data: %{encoding: :utf16, text: ["April 20"]},
                  id: "TIT2"
                },
                %Id3vx.Frame{
-                 data: %{encoding: 1, text: ["ProTranscoderTool (Apple MP3 v1"]},
+                 data: %{encoding: :utf16, text: ["ProTranscoderTool (Apple MP3 v1"]},
                  id: "TENC"
                },
                %Id3vx.Frame{
@@ -72,37 +72,38 @@ defmodule Id3vxTest do
                    description: "image",
                    mime_type: "image/jpg"
                  },
-                 id: "APIC"
+                 id: "APIC",
+                 label: "Attached picture"
                },
                %Id3vx.Frame{
                  id: "PCST"
                },
                %Id3vx.Frame{
-                 data: %{encoding: 1, text: ["Beam Radio"]},
+                 data: %{encoding: :utf16, text: ["Beam Radio"]},
                  id: "TALB"
                },
                %Id3vx.Frame{
-                 data: %{encoding: 1, text: ["Podcast"]},
+                 data: %{encoding: :utf16, text: ["Podcast"]},
                  id: "TCON"
                },
                %Id3vx.Frame{
-                 data: %{encoding: 1, text: ["2022 Lars Wikman"]},
+                 data: %{encoding: :utf16, text: ["2022 Lars Wikman"]},
                  id: "TCOP"
                },
                %Id3vx.Frame{
-                 data: %{encoding: 1, text: ["2022-05-05 14:00:00 UTC"]},
+                 data: %{encoding: :utf16, text: ["2022-05-05 14:00:00 UTC"]},
                  id: "TDRL"
                },
                %Id3vx.Frame{
-                 data: %{encoding: 1, text: ["http://www.beamrad.io/32"]},
+                 data: %{encoding: :utf16, text: ["http://www.beamrad.io/32"]},
                  id: "TGID"
                },
                %Id3vx.Frame{
-                 data: %{encoding: 1, text: ["Beam Radio 32: Untitled Episode"]},
+                 data: %{encoding: :utf16, text: ["Beam Radio 32: Untitled Episode"]},
                  id: "TIT2"
                },
                %Id3vx.Frame{
-                 data: %{encoding: 1, text: ["2022"]},
+                 data: %{encoding: :utf16, text: ["2022"]},
                  id: "TYER"
                },
                %Id3vx.Frame{
@@ -112,19 +113,19 @@ defmodule Id3vxTest do
                  id: "WXXX"
                },
                %Id3vx.Frame{
-                 data: %{encoding: 1, text: ["Lars Wikman"]},
+                 data: %{encoding: :utf16, text: ["Lars Wikman"]},
                  id: "TPE1"
                },
                %Id3vx.Frame{
-                 data: %{encoding: 1, text: ["Lars Wikman"]},
+                 data: %{encoding: :utf16, text: ["Lars Wikman"]},
                  id: "TOPE"
                },
                %Id3vx.Frame{
-                 data: %{encoding: 1, text: ["Lars Wikman"]},
+                 data: %{encoding: :utf16, text: ["Lars Wikman"]},
                  id: "TENC"
                },
                %Id3vx.Frame{
-                 data: %{encoding: 1, text: ["Lars Wikman"]},
+                 data: %{encoding: :utf16, text: ["Lars Wikman"]},
                  id: "TPUB"
                }
              ],
