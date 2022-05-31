@@ -96,22 +96,7 @@ defmodule Id3vx.Frame do
 
   alias Id3vx.Frame
   alias Id3vx.Tag
-
-  def encode_frame(%Frame{id: "T" <> _} = frame, %{version: 3}) do
-    data =
-      case frame.data.encoding do
-        0 ->
-          Enum.reduce(frame.data.text, <<>>, fn string, acc ->
-            acc <> string <> <<0x00>>
-          end)
-
-        1 ->
-          raise "unicode string encoding not implemented"
-      end
-
-    flags = <<0x00, 0x00>>
-    frame_size = byte_size(data)
-  end
+  alias Id3vx.Utils
 
   @text_encoding %{
     0x00 => :iso8859_1,
@@ -143,6 +128,44 @@ defmodule Id3vx.Frame do
     0x13 => :band_logotype,
     0x14 => :studio_logotype
   }
+
+  def encode_frame(%Frame{id: "T" <> _} = frame, %{version: 3}) do
+    {bom, encoding, terminator} =
+      case frame.data.encoding do
+        :iso8859_1 ->
+          {<<>>, :latin1, <<0x00>>}
+
+        :utf16 ->
+          encoding = {:utf16, :big}
+          {:unicode.encoding_to_bom(encoding), encoding, <<0x00, 0x00>>}
+      end
+
+    text =
+      case frame.data.text do
+        text when is_binary(text) ->
+          text
+
+        [text | []] ->
+          text
+
+        [text | extra] ->
+          Logger.warn(
+            "Multiple text strings while encoding text frame to ID3v2.3. This is not supported. Will throw out: #{inspect(extra)}"
+          )
+
+          text
+      end
+
+    encoded_text = bom <> :unicode.characters_to_binary(text, :utf8, encoding) <> terminator
+
+    # TODO: Encode flags properly
+    flags = <<0x00, 0x00>>
+    frame_size = encoded_text |> byte_size() |> Utils.pad_to_byte_size(4)
+    encoding_byte = @text_encoding |> Utils.flip_map() |> Map.get(frame.data.encoding)
+
+    frame.id <> frame_size <> flags <> <<encoding_byte>> <> encoded_text
+  end
+
   def parse("APIC" = id, _tag, _flags, data) do
     <<encoding::size(8), rest::binary>> = data
     {mime_type, rest} = split_at_next_null(rest)

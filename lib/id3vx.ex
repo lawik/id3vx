@@ -63,6 +63,7 @@ defmodule Id3vx do
   alias Id3vx.Frame
   alias Id3vx.FrameFlags
   alias Id3vx.Frame.Labels
+  alias Id3vx.Utils
 
   @parse_states [
     :parse_prepend_tag,
@@ -94,9 +95,15 @@ defmodule Id3vx do
     header <> body
   end
 
-  def tag_to_binary(%Tag{version: 3} = tag) do
-    tag.frames
-    |> encode_frames()
+  def encode_tag(%Tag{version: 3} = tag) do
+    frames =
+      tag
+      |> encode_frames()
+
+    # TODO: Proper flag encoding
+    flags = <<0x00>>
+    tag_size = frames |> byte_size() |> encode_synchsafe_integer()
+    tag = "ID3" <> <<tag.version>> <> <<tag.revision>> <> flags <> tag_size <> frames
   end
 
   def encode_frames(%Tag{frames: []}) do
@@ -416,6 +423,18 @@ defmodule Id3vx do
 
   defp subtract_footer(size, _) do
     size
+  end
+
+  def encode_synchsafe_integer(num) do
+    if num > 256 * 1024 * 1024 - 1 do
+      # TODO: Better error
+      raise "Cannot encode synchsafe integer larger than 256*1024*1024 (256 Mb in bytes)"
+    end
+
+    binary_num = <<num::size(28)>>
+
+    <<b4::7, b3::7, b2::7, b1::7>> = binary_num
+    <<0::1, b4::7, 0::1, b3::7, 0::1, b2::7, 0::1, b1::7>>
   end
 
   def decode_synchsafe_integer(<<0::1, _::7, 0::1, _::7, 0::1, _::7, 0::1, _::7>> = binary) do
