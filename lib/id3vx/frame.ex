@@ -129,7 +129,28 @@ defmodule Id3vx.Frame do
     0x14 => :studio_logotype
   }
 
-  def encode_frame(%Frame{id: "T" <> _} = frame, %{version: 3}) do
+  def encode_frame(%Frame{id: "CHAP"} = frame, %{version: 3} = tag) do
+    %{
+      element_id: element_id,
+      start_time: start_time,
+      end_time: end_time,
+      start_offset: start_offset,
+      end_offset: end_offset,
+      frames: frames
+    } = frame.data
+
+    # Encode sub-frames
+    encoded_frames = Enum.reduce(frames, <<>>, fn frame, acc ->
+      acc <> encode_frame(frame, tag)
+    end)
+
+    frame_binary = element_id <> <<0>> <> <<start_time::size(32), end_time::size(32), start_offset::size(32), end_offset::size(32)>> <> encoded_frames
+    frame_size = byte_size(frame_binary)
+    header = encode_header(frame, frame_size, tag)
+    header <> frame_binary
+  end
+
+  def encode_frame(%Frame{id: "T" <> _} = frame, %{version: 3} = tag) do
     {bom, encoding, terminator} =
       case frame.data.encoding do
         :iso8859_1 ->
@@ -158,12 +179,18 @@ defmodule Id3vx.Frame do
 
     encoded_text = bom <> :unicode.characters_to_binary(text, :utf8, encoding) <> terminator
 
+    encoding_byte = @text_encoding |> Utils.flip_map() |> Map.get(frame.data.encoding)
+    frame_binary = <<encoding_byte>> <> encoded_text
+    frame_size = byte_size(frame_binary)
+    header = encode_header(frame, frame_size, tag)
+    header <> frame_binary
+  end
+
+  def encode_header(%Frame{id: id, flags: flags}, size, %{version: 3}) do
     # TODO: Encode flags properly
     flags = <<0x00, 0x00>>
-    frame_size = encoded_text |> byte_size() |> Utils.pad_to_byte_size(4)
-    encoding_byte = @text_encoding |> Utils.flip_map() |> Map.get(frame.data.encoding)
-
-    frame.id <> frame_size <> flags <> <<encoding_byte>> <> encoded_text
+    size = Utils.pad_to_byte_size(size, 4)
+    id <> size <> flags
   end
 
   def parse("APIC" = id, _tag, _flags, data) do
