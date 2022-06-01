@@ -140,11 +140,51 @@ defmodule Id3vx.Frame do
     } = frame.data
 
     # Encode sub-frames
-    encoded_frames = Enum.reduce(frames, <<>>, fn frame, acc ->
-      acc <> encode_frame(frame, tag)
-    end)
+    encoded_frames =
+      Enum.reduce(frames, <<>>, fn frame, acc ->
+        acc <> encode_frame(frame, tag)
+      end)
 
-    frame_binary = element_id <> <<0>> <> <<start_time::size(32), end_time::size(32), start_offset::size(32), end_offset::size(32)>> <> encoded_frames
+    frame_binary =
+      element_id <>
+        <<0>> <>
+        <<start_time::size(32), end_time::size(32), start_offset::size(32), end_offset::size(32)>> <>
+        encoded_frames
+
+    frame_size = byte_size(frame_binary)
+    header = encode_header(frame, frame_size, tag)
+    header <> frame_binary
+  end
+
+  def encode_frame(%Frame{id: "CTOC"} = frame, %{version: 3} = tag) do
+    %{
+      element_id: element_id,
+      top_level: top_level,
+      ordered: ordered,
+      child_elements: child_elements,
+      frames: frames
+    } = frame.data
+
+    entry_count = length(child_elements)
+
+    encoded_child_elements = Enum.join(child_elements, <<0>>)
+
+    # Encode sub-frames
+    encoded_frames =
+      Enum.reduce(frames, <<>>, fn frame, acc ->
+        acc <> encode_frame(frame, tag)
+      end)
+
+    top_level = Utils.to_flag_int(top_level)
+    ordered = Utils.to_flag_int(ordered)
+
+    frame_binary =
+      element_id <>
+        <<0>> <>
+        <<0::6, top_level::1, ordered::1, entry_count::8>> <>
+        encoded_child_elements <>
+        encoded_frames
+
     frame_size = byte_size(frame_binary)
     header = encode_header(frame, frame_size, tag)
     header <> frame_binary
@@ -184,6 +224,17 @@ defmodule Id3vx.Frame do
     frame_size = byte_size(frame_binary)
     header = encode_header(frame, frame_size, tag)
     header <> frame_binary
+  end
+
+  def encode_frame(%Frame{data: %{status: :not_implemented}} = frame, %{version: 3} = tag) do
+    frame_size = byte_size(frame.data.raw_data)
+    header = encode_header(frame, frame_size, tag)
+    header <> frame.data.raw_data
+  end
+
+  def encode_frame(%Frame{} = frame, tag) do
+    # TODO: Better error handling
+    raise "Unknown frame '#{frame.id}', not implemented for encoding and missing the raw data to be blindly re-encoded"
   end
 
   def encode_header(%Frame{id: id, flags: flags}, size, %{version: 3}) do

@@ -11,6 +11,9 @@ defmodule Id3vx.Utils do
     end
   end
 
+  def to_flag_int(truth?) when truth?, do: 1
+  def to_flag_int(truth?) when not truth?, do: 0
+
   def flip_map(m) do
     Map.new(m, fn {key, val} -> {val, key} end)
   end
