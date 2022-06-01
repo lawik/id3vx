@@ -2,6 +2,8 @@ defmodule Id3vxTest do
   use ExUnit.Case
   # doctest Id3vx
   require Logger
+  alias Id3vx.Tag
+  alias Id3vx.Frame
 
   @samples_path "test/samples"
   setup_all do
@@ -672,5 +674,41 @@ defmodule Id3vxTest do
              size: 421_307,
              version: 3
            } = tag
+  end
+
+  test "Replace tag in mp3 file" do
+    path = Path.join(@samples_path, "beamradio32.mp3")
+    outpath = "/tmp/out.mp3"
+    assert {:ok, tag} = Id3vx.parse_file(path)
+    original_tag_size = tag.size + 10
+
+    tag = %Tag{
+      version: 3,
+      revision: 0,
+      frames: [
+        %Id3vx.Frame{
+          data: %{encoding: :utf16, text: "New tag"},
+          id: "TIT1"
+        }
+      ]
+    }
+
+    assert :ok = Id3vx.replace_tag(tag, path, outpath)
+
+    # Check that the files still parse
+    assert {:ok, in_tag} = Id3vx.parse_file(path)
+    assert 19 = Enum.count(in_tag.frames)
+    assert {:ok, out_tag} = Id3vx.parse_file(outpath)
+    new_tag_size = out_tag.size + 10
+
+    # Figure out size difference
+    size_diff = original_tag_size - new_tag_size
+
+    assert 1 = Enum.count(out_tag.frames)
+    assert {:ok, in_stat} = File.stat(path)
+    assert {:ok, out_stat} = File.stat(outpath)
+
+    # Confirm size difference
+    assert in_stat.size - size_diff == out_stat.size
   end
 end

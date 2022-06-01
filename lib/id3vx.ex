@@ -92,6 +92,30 @@ defmodule Id3vx do
     |> parse
   end
 
+  def replace_tag(%Tag{} = tag, infile_path, outfile_path) do
+    binary = encode_tag(tag)
+    {:ok, indevice} = File.open(infile_path, [:read, :binary])
+    {:ok, outdevice} = File.open(outfile_path, [:write, :binary])
+    tag_header = IO.binread(indevice, 10)
+    {:ok, tag} = parse_tag(tag_header)
+    _skip = IO.binread(indevice, tag.size)
+    IO.binwrite(outdevice, binary)
+    read_write(indevice, outdevice)
+  end
+
+  # 1 Mb
+  @chunk_size 1024 * 1024
+  defp read_write(indevice, outdevice) do
+    case IO.binread(indevice, @chunk_size) do
+      :eof ->
+        :ok
+
+      data ->
+        IO.binwrite(outdevice, data)
+        read_write(indevice, outdevice)
+    end
+  end
+
   def get_tag_binary(<<binary::binary>>) do
     <<header::binary-size(10), rest::binary>> = binary
     {:ok, tag} = parse_tag(header)
