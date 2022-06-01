@@ -78,12 +78,17 @@ defmodule Id3vx do
   ]
 
   def parse_file(path) do
-    binary = File.read!(path)
-    parse_binary(binary)
+    {:ok, device} = File.open(path, [:read, :binary])
+    parse_io(device)
   end
 
   def parse_binary(<<binary::binary>>) do
     {<<>>, binary}
+    |> parse
+  end
+
+  def parse_io(device) do
+    device
     |> parse
   end
 
@@ -121,6 +126,11 @@ defmodule Id3vx do
     Enum.reduce(frames, <<>>, fn frame, acc ->
       acc <> Frame.encode_frame(frame, tag)
     end)
+  end
+
+  def get_bytes(device, bytes) when is_pid(device) do
+    data = IO.binread(device, bytes)
+    {data, device}
   end
 
   def get_bytes({used, unused}, bytes) do
