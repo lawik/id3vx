@@ -96,6 +96,7 @@ defmodule Id3vx.Frame do
 
   require Logger
 
+  alias Id3vx.Error
   alias Id3vx.Frame
   alias Id3vx.Tag
   alias Id3vx.Utils
@@ -250,9 +251,11 @@ defmodule Id3vx.Frame do
     IO.iodata_to_binary([header, frame.data.raw_data])
   end
 
-  def encode_frame(%Frame{} = frame, _tag) do
-    # TODO: Better error handling
-    raise "Unknown frame '#{frame.id}', not implemented for encoding and missing the raw data to be blindly re-encoded"
+  def encode_frame(%Frame{} = frame, tag) do
+    raise Error,
+      message:
+        "Unknown frame '#{frame.id}', not implemented for encoding and missing the raw data to be blindly re-encoded",
+      context: {:frame, frame, tag}
   end
 
   def encode_header(%Frame{id: id, flags: _flags}, size, %{version: 3}) do

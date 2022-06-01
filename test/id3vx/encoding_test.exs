@@ -70,7 +70,7 @@ defmodule Id3vx.EncodingTest do
       assert num1 == num2
     end
 
-    assert_raise(RuntimeError, fn ->
+    assert_raise(Id3vx.Error, fn ->
       Id3vx.encode_synchsafe_integer(max)
     end)
   end

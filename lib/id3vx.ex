@@ -1,22 +1,17 @@
 defmodule Id3vx do
   @moduledoc """
-  Documentation for `Id3vx`.
-  """
-
-  @doc """
-  Hello world.
-
-  ## Examples
-
-      iex> Id3vx.hello()
-      :world
-
+  Provides the API for interacting with ID3 tags and files that
+  contain them.
   """
 
   use Bitwise
   require Logger
 
   defmodule Tag do
+    @moduledoc """
+    The base data structure for the ID3 tag.
+    """
+
     defstruct version: nil,
               revision: nil,
               flags: nil,
@@ -27,24 +22,29 @@ defmodule Id3vx do
   end
 
   defmodule TagFlags do
+    @moduledoc false
     defstruct unsynchronisation: nil, extended_header: nil, experimental: nil, footer: nil
   end
 
   defmodule ExtendedHeaderV4 do
+    @moduledoc false
     defstruct size: nil, flag_bytes: nil, flags: nil
   end
 
   defmodule ExtendedHeaderV3 do
+    @moduledoc false
     defstruct size: nil, flags: nil, padding: nil
   end
 
   defmodule ExtendedHeaderFlags do
+    @moduledoc false
     defstruct is_update: nil,
               crc_data_present: nil,
               tag_restrictions: nil
   end
 
   defmodule FrameFlags do
+    @moduledoc false
     defstruct tag_alter_preservation: nil,
               file_alter_preservation: nil,
               read_only: nil,
@@ -60,6 +60,7 @@ defmodule Id3vx do
   alias Id3vx.ExtendedHeaderV4
   alias Id3vx.ExtendedHeaderV3
   alias Id3vx.ExtendedHeaderFlags
+  alias Id3vx.Error
   alias Id3vx.Frame
   alias Id3vx.FrameFlags
   alias Id3vx.Frame.Labels
@@ -77,22 +78,59 @@ defmodule Id3vx do
     :done
   ]
 
+  @doc """
+  Parse an ID3 tag from the given file path.
+
+  It will open the file read-only and only read as many bytes as
+  necessary.
+
+  Returns an `Id3vx.Tag` struct or raises an `Id3vx.Error`.
+  """
+  def parse_file!(path) do
+    case File.open(path, [:read, :binary]) do
+      {:ok, device} ->
+        parse_io(device)
+
+      {:error, e} ->
+        raise Error,
+          message: "Could not load file '#{inspect(path)}', error: #{inspect(e)}",
+          context: {:file_open, e}
+    end
+  end
+
   def parse_file(path) do
-    {:ok, device} = File.open(path, [:read, :binary])
-    parse_io(device)
+    try do
+      {:ok, parse_file!(path)}
+    rescue
+      e in Error -> {:error, e}
+    end
   end
 
-  def parse_binary(<<binary::binary>>) do
-    {<<>>, binary}
-    |> parse
+  def parse_binary!(<<binary::binary>>) do
+    parse({<<>>, binary})
   end
 
-  def parse_io(device) do
-    device
-    |> parse
+  def parse_binary(binary) do
+    try do
+      {:ok, parse_binary!(binary)}
+    rescue
+      e in Error -> {:error, e}
+    end
+  end
+
+  defp parse_io(device) do
+    parse(device)
   end
 
   def replace_tag(%Tag{} = tag, infile_path, outfile_path) do
+    try do
+      replace_tag!(tag, infile_path, outfile_path)
+    rescue
+      e in Error -> {:error, e}
+    end
+  end
+
+  def replace_tag!(%Tag{} = tag, infile_path, outfile_path) do
     binary = encode_tag(tag)
     {:ok, indevice} = File.open(infile_path, [:read, :binary])
     {:ok, outdevice} = File.open(outfile_path, [:write, :binary])
@@ -141,32 +179,33 @@ defmodule Id3vx do
     ])
   end
 
+  @doc false
   def encode_frames(%Tag{frames: []}) do
-    # TODO: proper error
-    raise "Cannot generate an empty ID3 tag"
+    raise Error, message: "Cannot generate an empty ID3 tag"
   end
 
+  @doc false
   def encode_frames(%Tag{frames: frames} = tag) do
     Enum.reduce(frames, <<>>, fn frame, acc ->
       acc <> Frame.encode_frame(frame, tag)
     end)
   end
 
-  def get_bytes(device, bytes) when is_pid(device) do
+  defp get_bytes(device, bytes) when is_pid(device) do
     data = IO.binread(device, bytes)
     {data, device}
   end
 
-  def get_bytes({used, unused}, bytes) do
+  defp get_bytes({used, unused}, bytes) do
     <<data::binary-size(bytes), rest::binary>> = unused
     {data, {used <> data, rest}}
   end
 
-  def parse(source) do
+  defp parse(source) do
     iterate(source, :parse_prepend_tag, nil)
   end
 
-  def iterate(source, step, state) do
+  defp iterate(source, step, state) do
     state_number = Enum.find_index(@parse_states, fn s -> s == step end) + 1
     Logger.debug("Parser step ##{state_number}: #{step}")
 
@@ -188,7 +227,7 @@ defmodule Id3vx do
         end
 
       :not_found ->
-        {:done, {:error, :not_found}}
+        raise Error, message: "Tag not found", context: :parse_prepend_tag
     end
   end
 
@@ -208,7 +247,12 @@ defmodule Id3vx do
           get_bytes(source, ext_header.size - 6)
 
         3 ->
-          if tag.flags.unsynchronisation, do: raise("v3 unsynchronization not implemented!")
+          if tag.flags.unsynchronisation do
+            raise Error,
+              message: "v3 unsynchronization not implemented!",
+              context: :parse_extended_header
+          end
+
           get_bytes(source, ext_header.size - 6)
       end
 
@@ -270,7 +314,7 @@ defmodule Id3vx do
 
   defp parse_step(_source, step, state) do
     Logger.warn("Step not implemented #{step}")
-    {:done, {:ok, state}}
+    {:done, state}
   end
 
   def parse_tag(
@@ -310,11 +354,11 @@ defmodule Id3vx do
     :not_found
   end
 
-  def parse_extended_header_fixed(
-        %{version: 4},
-        <<size::binary-size(4), _::binary-size(1), _::size(1), is_update::size(1),
-          crc_data_present::size(1), tag_restrictions::size(1), _unused::size(4)>>
-      ) do
+  defp parse_extended_header_fixed(
+         %{version: 4},
+         <<size::binary-size(4), _::binary-size(1), _::size(1), is_update::size(1),
+           crc_data_present::size(1), tag_restrictions::size(1), _unused::size(4)>>
+       ) do
     %ExtendedHeaderV4{
       size: decode_synchsafe_integer(size),
       flag_bytes: 0x01,
@@ -326,10 +370,10 @@ defmodule Id3vx do
     }
   end
 
-  def parse_extended_header_fixed(
-        %{version: 3},
-        <<size::binary-size(4), crc_data_present::1, _::15, _padding_size::binary-size(4)>>
-      ) do
+  defp parse_extended_header_fixed(
+         %{version: 3},
+         <<size::binary-size(4), crc_data_present::1, _::15, _padding_size::binary-size(4)>>
+       ) do
     %ExtendedHeaderV3{
       size: size,
       flags: %ExtendedHeaderFlags{
@@ -414,7 +458,7 @@ defmodule Id3vx do
     end
   end
 
-  def parse_frame_flags(flags) do
+  defp parse_frame_flags(flags) do
     <<0::1, tap::1, fap::1, ro::1, 0::5, gi::1, 0::2, c::1, e::1, u::1, dli::1>> = flags
 
     %FrameFlags{
@@ -467,8 +511,9 @@ defmodule Id3vx do
 
   def encode_synchsafe_integer(num) do
     if num > 256 * 1024 * 1024 - 1 do
-      # TODO: Better error
-      raise "Cannot encode synchsafe integer larger than 256*1024*1024 (256 Mb in bytes)"
+      raise Error,
+        message: "Cannot encode synchsafe integer larger than 256*1024*1024 (256 Mb in bytes)",
+        context: :encode_synchsafe_integer
     end
 
     binary_num = <<num::size(28)>>
