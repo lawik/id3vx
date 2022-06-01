@@ -96,14 +96,20 @@ defmodule Id3vx do
   end
 
   def encode_tag(%Tag{version: 3} = tag) do
-    frames =
-      tag
-      |> encode_frames()
+    frames = encode_frames(tag)
 
     # TODO: Proper flag encoding
     flags = <<0x00>>
     tag_size = frames |> byte_size() |> encode_synchsafe_integer()
-    tag = "ID3" <> <<tag.version>> <> <<tag.revision>> <> flags <> tag_size <> frames
+
+    IO.iodata_to_binary([
+      "ID3",
+      <<tag.version>>,
+      <<tag.revision>>,
+      flags,
+      tag_size,
+      frames
+    ])
   end
 
   def encode_frames(%Tag{frames: []}) do

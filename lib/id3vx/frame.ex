@@ -94,6 +94,8 @@ defmodule Id3vx.Frame do
             label: nil,
             data: nil
 
+  require Logger
+
   alias Id3vx.Frame
   alias Id3vx.Tag
   alias Id3vx.Utils
@@ -141,19 +143,26 @@ defmodule Id3vx.Frame do
 
     # Encode sub-frames
     encoded_frames =
-      Enum.reduce(frames, <<>>, fn frame, acc ->
-        acc <> encode_frame(frame, tag)
+      Enum.map(frames, fn frame ->
+        encode_frame(frame, tag)
       end)
 
-    frame_binary =
-      element_id <>
-        <<0>> <>
-        <<start_time::size(32), end_time::size(32), start_offset::size(32), end_offset::size(32)>> <>
-        encoded_frames
+    frame_binary = [
+      element_id,
+      <<0>>,
+      <<
+        start_time::size(32),
+        end_time::size(32),
+        start_offset::size(32),
+        end_offset::size(32)
+      >>,
+      encoded_frames
+    ]
 
-    frame_size = byte_size(frame_binary)
+    frame_size = IO.iodata_length(frame_binary)
     header = encode_header(frame, frame_size, tag)
-    header <> frame_binary
+
+    IO.iodata_to_binary([header, frame_binary])
   end
 
   def encode_frame(%Frame{id: "CTOC"} = frame, %{version: 3} = tag) do
@@ -171,23 +180,24 @@ defmodule Id3vx.Frame do
 
     # Encode sub-frames
     encoded_frames =
-      Enum.reduce(frames, <<>>, fn frame, acc ->
-        acc <> encode_frame(frame, tag)
+      Enum.map(frames, fn frame ->
+        encode_frame(frame, tag)
       end)
 
     top_level = Utils.to_flag_int(top_level)
     ordered = Utils.to_flag_int(ordered)
 
-    frame_binary =
-      element_id <>
-        <<0>> <>
-        <<0::6, top_level::1, ordered::1, entry_count::8>> <>
-        encoded_child_elements <>
-        encoded_frames
+    frame_binary = [
+      element_id,
+      <<0>>,
+      <<0::6, top_level::1, ordered::1, entry_count::8>>,
+      encoded_child_elements,
+      encoded_frames
+    ]
 
-    frame_size = byte_size(frame_binary)
+    frame_size = IO.iodata_length(frame_binary)
     header = encode_header(frame, frame_size, tag)
-    header <> frame_binary
+    IO.iodata_to_binary([header, frame_binary])
   end
 
   def encode_frame(%Frame{id: "T" <> _} = frame, %{version: 3} = tag) do
@@ -217,31 +227,39 @@ defmodule Id3vx.Frame do
           text
       end
 
-    encoded_text = bom <> :unicode.characters_to_binary(text, :utf8, encoding) <> terminator
+    encoded_text = [
+      bom,
+      :unicode.characters_to_binary(text, :utf8, encoding),
+      terminator
+    ]
 
-    encoding_byte = @text_encoding |> Utils.flip_map() |> Map.get(frame.data.encoding)
-    frame_binary = <<encoding_byte>> <> encoded_text
-    frame_size = byte_size(frame_binary)
+    encoding_byte =
+      @text_encoding
+      |> Utils.flip_map()
+      |> Map.get(frame.data.encoding)
+
+    frame_binary = [<<encoding_byte>>, encoded_text]
+    frame_size = IO.iodata_length(frame_binary)
     header = encode_header(frame, frame_size, tag)
-    header <> frame_binary
+    IO.iodata_to_binary([header, frame_binary])
   end
 
   def encode_frame(%Frame{data: %{status: :not_implemented}} = frame, %{version: 3} = tag) do
     frame_size = byte_size(frame.data.raw_data)
     header = encode_header(frame, frame_size, tag)
-    header <> frame.data.raw_data
+    IO.iodata_to_binary([header, frame.data.raw_data])
   end
 
-  def encode_frame(%Frame{} = frame, tag) do
+  def encode_frame(%Frame{} = frame, _tag) do
     # TODO: Better error handling
     raise "Unknown frame '#{frame.id}', not implemented for encoding and missing the raw data to be blindly re-encoded"
   end
 
-  def encode_header(%Frame{id: id, flags: flags}, size, %{version: 3}) do
+  def encode_header(%Frame{id: id, flags: _flags}, size, %{version: 3}) do
     # TODO: Encode flags properly
     flags = <<0x00, 0x00>>
     size = Utils.pad_to_byte_size(size, 4)
-    id <> size <> flags
+    [id, size, flags]
   end
 
   def parse("APIC" = id, _tag, _flags, data) do
@@ -341,7 +359,7 @@ defmodule Id3vx.Frame do
     }
   end
 
-  def parse("PCST" = id, _tag, _flags, data) do
+  def parse("PCST" = id, _tag, _flags, _data) do
     %Frame{
       id: id,
       data: %{

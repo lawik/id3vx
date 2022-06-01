@@ -5,8 +5,6 @@ defmodule Id3vx.EncodingTest do
   alias Id3vx.TagFlags
   alias Id3vx.Frame
   alias Id3vx.FrameFlags
-  alias Id3vx.ExtendedHeaderV3
-  alias Id3vx.ExtendedHeaderFlags
 
   test "tag v2.3 with a TIT2 frame" do
     tag = %Tag{
@@ -40,7 +38,8 @@ defmodule Id3vx.EncodingTest do
     tag_size = Id3vx.decode_synchsafe_integer(tag_size)
     assert 31 == tag_size
 
-    assert <<"TIT2", frame_size::size(32), flags::binary-size(2), frames_data::binary>> = tag_rest
+    assert <<"TIT2", frame_size::size(32), _flags::binary-size(2), frames_data::binary>> =
+             tag_rest
 
     assert 21 == frame_size
 
@@ -114,14 +113,14 @@ defmodule Id3vx.EncodingTest do
     encoded_text = :unicode.encoding_to_bom({:utf16, :big}) <> encoded_string <> <<0x00, 0x00>>
 
     assert <<frame_header::binary-size(10), frame_data::binary>> = binary
-    assert <<"CHAP", frame_size::size(32), flags::binary-size(2)>> = frame_header
+    assert <<"CHAP", frame_size::size(32), _flags::binary-size(2)>> = frame_header
 
     assert 71 == frame_size
-    [element_id, frame_rest] = :binary.split(frame_data, <<0>>)
+    ["chp1", frame_rest] = :binary.split(frame_data, <<0>>)
 
     <<0::size(32), 5000::size(32), 0::size(32), 1024::size(32), sub_frames::binary>> = frame_rest
 
-    assert <<"TIT2", frame_size::size(32), flags::binary-size(2), frames_data::binary>> =
+    assert <<"TIT2", frame_size::size(32), _flags::binary-size(2), frames_data::binary>> =
              sub_frames
 
     assert 15 == frame_size
@@ -131,7 +130,7 @@ defmodule Id3vx.EncodingTest do
     assert <<0x01::size(8), frame_text::binary>> = sub_frame1
     assert encoded_text == frame_text
 
-    assert <<"TIT3", frame_size::size(32), flags::binary-size(2), frames_data::binary>> =
+    assert <<"TIT3", frame_size::size(32), _flags::binary-size(2), frames_data::binary>> =
              more_frames
 
     assert 15 == frame_size
@@ -182,16 +181,16 @@ defmodule Id3vx.EncodingTest do
     encoded_text = :unicode.encoding_to_bom({:utf16, :big}) <> encoded_string <> <<0x00, 0x00>>
 
     assert <<frame_header::binary-size(10), frame_data::binary>> = binary
-    assert <<"CTOC", frame_size::size(32), flags::binary-size(2)>> = frame_header
+    assert <<"CTOC", frame_size::size(32), _flags::binary-size(2)>> = frame_header
 
     assert 66 == frame_size
-    [element_id, frame_rest] = :binary.split(frame_data, <<0>>)
+    ["toc1", frame_rest] = :binary.split(frame_data, <<0>>)
 
-    <<0::size(6), 1::size(1), 1::size(1), entry_count::size(8), rest::binary>> = frame_rest
+    <<0::size(6), 1::size(1), 1::size(1), 2::size(8), rest::binary>> = frame_rest
 
     <<"chp1", 0::8, "chp2", sub_frames::binary>> = rest
 
-    assert <<"TIT2", frame_size::size(32), flags::binary-size(2), frames_data::binary>> =
+    assert <<"TIT2", frame_size::size(32), _flags::binary-size(2), frames_data::binary>> =
              sub_frames
 
     assert 15 == frame_size
@@ -201,7 +200,7 @@ defmodule Id3vx.EncodingTest do
     assert <<0x01::size(8), frame_text::binary>> = sub_frame1
     assert encoded_text == frame_text
 
-    assert <<"TIT3", frame_size::size(32), flags::binary-size(2), frames_data::binary>> =
+    assert <<"TIT3", frame_size::size(32), _flags::binary-size(2), frames_data::binary>> =
              more_frames
 
     assert 15 == frame_size
