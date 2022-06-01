@@ -32,9 +32,14 @@ defmodule Id3vxTest do
 
   test "parse samples", %{ok_files: ok_files} do
     for path <- ok_files do
-      assert {:ok, tag} = Id3vx.parse_file(path)
-      # IO.puts(path)
-      # IO.inspect(tag)
+      binary = File.read!(path)
+      assert {:ok, tag} = Id3vx.parse_binary(binary)
+
+      # TODO: Re-enable these tests when we support encoding and parsing
+      #       for the same set of frames
+      # tag_binary = Id3vx.get_tag_binary(binary)
+      # encoded_tag = Id3vx.encode_tag(tag)
+      # assert tag_binary == encoded_tag
 
       for frame <- tag.frames do
         if frame.data[:status] == :not_implemented do
