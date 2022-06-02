@@ -325,6 +325,33 @@ defmodule Id3vx.Frame do
     IO.iodata_to_binary([header, raw])
   end
 
+  def encode_frame(%Frame{id: "OWNE"} = frame, %{version: 3} = tag) do
+    %{
+      encoding: encoding,
+      currency: currency,
+      price_paid: price_paid,
+      date: date,
+      seller: seller
+    } = frame.data
+
+    encoding_byte =
+      @text_encoding
+      |> Utils.flip_map()
+      |> Map.get(encoding)
+
+    frame_binary = [<<encoding_byte>>, currency, price_paid, <<0>>, date, seller]
+
+    frame_size = IO.iodata_length(frame_binary)
+    header = encode_header(frame, frame_size, tag)
+    IO.iodata_to_binary([header, frame_binary])
+  end
+
+  def encode_frame(%Frame{data: %Frame.Unknown{raw_data: raw}} = frame, %{version: 3} = tag) do
+    frame_size = byte_size(raw)
+    header = encode_header(frame, frame_size, tag)
+    IO.iodata_to_binary([header, raw])
+  end
+
   def encode_frame(%Frame{} = frame, tag) do
     throw(%Error{
       message:
@@ -501,6 +528,30 @@ defmodule Id3vx.Frame do
       id: id,
       data: %Frame.URL{
         url: url
+      }
+    }
+  end
+
+  def parse("OWNE" = id, _tag, _flags, data) do
+    <<encoding::size(8), rest::binary>> = data
+    encoding = @text_encoding[encoding]
+
+    {price, rest} = split_at_null(encoding, rest)
+    <<currency::binary-size(3), price_paid::binary>> = price
+
+    <<date::binary-size(8), rest::binary>> = rest
+    seller = rest
+
+    seller = convert_string(encoding, seller)
+
+    %Frame{
+      id: id,
+      data: %{
+        encoding: encoding,
+        currency: currency,
+        price_paid: price_paid,
+        date: date,
+        seller: seller
       }
     }
   end

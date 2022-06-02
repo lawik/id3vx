@@ -244,4 +244,30 @@ defmodule Id3vx.EncodingTest do
 
     assert image_data == frame.data.image_data
   end
+
+  test "v2.3 encoding OWNE frame" do
+    frame = %Frame{
+      id: "OWNE",
+      flags: %FrameFlags{},
+      data: %{
+        encoding: :utf16,
+        currency: "SEK",
+        price_paid: "1000",
+        date: "20220602",
+        seller: "Underjord AB"
+      }
+    }
+    binary = Frame.encode_frame(frame, %Tag{version: 3})
+    assert <<frame_header::binary-size(10), frame_data::binary>> = binary
+    assert <<"OWNE", frame_size::size(32), _flags::binary-size(2)>> = frame_header
+    assert 29 == frame_size
+
+    assert <<0x01::size(8), frame_rest::binary>> = frame_data
+
+    [price, rest] = :binary.split(frame_rest, <<0>>)
+
+    assert <<"SEK", "1000">> = price
+
+    assert <<"20220602", "Underjord AB">> = rest
+  end
 end
