@@ -4,6 +4,7 @@ defmodule Id3vxTest do
   require Logger
   alias Id3vx.Tag
   alias Id3vx.Frame
+  alias Id3vx.Frame.Unknown
 
   @samples_path "test/samples"
   setup_all do
@@ -44,8 +45,12 @@ defmodule Id3vxTest do
       # assert tag_binary == encoded_tag
 
       for frame <- tag.frames do
-        if frame.data[:status] == :not_implemented do
-          Logger.warn("Frame not implemented '#{frame.id}' in #{path}.")
+        case frame.data do
+          %Unknown{} ->
+            Logger.warn("Frame not implemented '#{frame.id}' in #{path}.")
+
+          _ ->
+            nil
         end
       end
     end
@@ -64,22 +69,22 @@ defmodule Id3vxTest do
              },
              footer: nil,
              frames: [
-               %Id3vx.Frame{
+               %Frame{
                  data: %{encoding: :utf16, text: "Accidental Tech Podcast"},
                  id: "TALB",
                  label: "Album/Movie/Show title"
                },
-               %Id3vx.Frame{
+               %Frame{
                  data: %{encoding: :utf16, text: "Accidental Tech Podcast"},
                  id: "TPE1",
                  label: "Lead performer(s)/Soloist(s)"
                },
-               %Id3vx.Frame{
+               %Frame{
                  data: %{encoding: :utf16, text: "483: The Faceless Knob"},
                  id: "TIT2",
                  label: "Title/songname/content description"
                },
-               %Id3vx.Frame{
+               %Frame{
                  data: %{
                    description: "",
                    encoding: :utf16,
@@ -89,14 +94,12 @@ defmodule Id3vxTest do
                  id: "COMM",
                  label: "Comments"
                },
-               %Id3vx.Frame{
-                 data: %{
-                   status: :not_implemented
-                 },
+               %Frame{
+                 data: %Unknown{},
                  id: "USLT",
                  label: "Unsynchronised lyric/text transcription"
                },
-               %Id3vx.Frame{
+               %Frame{
                  data: %{
                    element_id: "toc",
                    frames: [],
@@ -126,18 +129,18 @@ defmodule Id3vxTest do
                  id: "CTOC",
                  label: nil
                },
-               %Id3vx.Frame{
+               %Frame{
                  data: %{
                    element_id: "chp0",
                    end_offset: 4_294_967_295,
                    end_time: 298_000,
                    frames: [
-                     %Id3vx.Frame{
+                     %Frame{
                        data: %{encoding: :utf16, text: "Recording?"},
                        id: "TIT2",
                        label: "Title/songname/content description"
                      },
-                     %Id3vx.Frame{
+                     %Frame{
                        data: %{
                          description: "",
                          encoding: :iso8859_1,
@@ -154,13 +157,13 @@ defmodule Id3vxTest do
                  id: "CHAP",
                  label: "Chapters"
                },
-               %Id3vx.Frame{
+               %Frame{
                  data: %{
                    element_id: "chp1",
                    end_offset: 4_294_967_295,
                    end_time: 693_267,
                    frames: [
-                     %Id3vx.Frame{
+                     %Frame{
                        data: %{
                          encoding: :utf16,
                          text: "Follow-up: Mac-\"cleaning\" apps"
@@ -175,13 +178,13 @@ defmodule Id3vxTest do
                  id: "CHAP",
                  label: "Chapters"
                },
-               %Id3vx.Frame{
+               %Frame{
                  data: %{
                    element_id: "chp2",
                    end_offset: 4_294_967_295,
                    end_time: 1_120_306,
                    frames: [
-                     %Id3vx.Frame{
+                     %Frame{
                        data: %{encoding: :utf16, text: "Casey's Ethernet project"},
                        id: "TIT2",
                        label: "Title/songname/content description"
@@ -193,13 +196,13 @@ defmodule Id3vxTest do
                  id: "CHAP",
                  label: "Chapters"
                },
-               %Id3vx.Frame{
+               %Frame{
                  data: %{
                    element_id: "chp3",
                    end_offset: 4_294_967_295,
                    end_time: 1_327_500,
                    frames: [
-                     %Id3vx.Frame{
+                     %Frame{
                        data: %{encoding: :utf16, text: "Home 5G"},
                        id: "TIT2",
                        label: "Title/songname/content description"
@@ -211,13 +214,13 @@ defmodule Id3vxTest do
                  id: "CHAP",
                  label: "Chapters"
                },
-               %Id3vx.Frame{
+               %Frame{
                  data: %{
                    element_id: "chp4",
                    end_offset: 4_294_967_295,
                    end_time: 1_721_941,
                    frames: [
-                     %Id3vx.Frame{
+                     %Frame{
                        data: %{encoding: :utf16, text: "IPv6"},
                        id: "TIT2",
                        label: "Title/songname/content description"
@@ -229,18 +232,18 @@ defmodule Id3vxTest do
                  id: "CHAP",
                  label: "Chapters"
                },
-               %Id3vx.Frame{
+               %Frame{
                  data: %{
                    element_id: "chp5",
                    end_offset: 4_294_967_295,
                    end_time: 1_842_972,
                    frames: [
-                     %Id3vx.Frame{
+                     %Frame{
                        data: %{encoding: :utf16, text: "Sponsor: Linode"},
                        id: "TIT2",
                        label: "Title/songname/content description"
                      },
-                     %Id3vx.Frame{
+                     %Frame{
                        data: %{
                          description: "chapter url",
                          encoding: :iso8859_1,
@@ -256,13 +259,13 @@ defmodule Id3vxTest do
                  id: "CHAP",
                  label: "Chapters"
                },
-               %Id3vx.Frame{
+               %Frame{
                  data: %{
                    element_id: "chp6",
                    end_offset: 4_294_967_295,
                    end_time: 1_963_500,
                    frames: [
-                     %Id3vx.Frame{
+                     %Frame{
                        data: %{encoding: :utf16, text: "Follow-up: USB-C KVMs"},
                        id: "TIT2",
                        label: "Title/songname/content description"
@@ -274,18 +277,18 @@ defmodule Id3vxTest do
                  id: "CHAP",
                  label: "Chapters"
                },
-               %Id3vx.Frame{
+               %Frame{
                  data: %{
                    element_id: "chp7",
                    end_offset: 4_294_967_295,
                    end_time: 2_371_654,
                    frames: [
-                     %Id3vx.Frame{
+                     %Frame{
                        data: %{encoding: :utf16, text: "Fastmail vs. Legacy G Suite"},
                        id: "TIT2",
                        label: "Title/songname/content description"
                      },
-                     %Id3vx.Frame{
+                     %Frame{
                        data: %{
                          description: "chapter url",
                          encoding: :iso8859_1,
@@ -301,18 +304,18 @@ defmodule Id3vxTest do
                  id: "CHAP",
                  label: "Chapters"
                },
-               %Id3vx.Frame{
+               %Frame{
                  data: %{
                    element_id: "chp8",
                    end_offset: 4_294_967_295,
                    end_time: 2_488_421,
                    frames: [
-                     %Id3vx.Frame{
+                     %Frame{
                        data: %{encoding: :utf16, text: "Sponsor: Trade Coffee"},
                        id: "TIT2",
                        label: "Title/songname/content description"
                      },
-                     %Id3vx.Frame{
+                     %Frame{
                        data: %{
                          description: "chapter url",
                          encoding: :iso8859_1,
@@ -328,13 +331,13 @@ defmodule Id3vxTest do
                  id: "CHAP",
                  label: "Chapters"
                },
-               %Id3vx.Frame{
+               %Frame{
                  data: %{
                    element_id: "chp9",
                    end_offset: 4_294_967_295,
                    end_time: 2_929_500,
                    frames: [
-                     %Id3vx.Frame{
+                     %Frame{
                        data: %{encoding: :utf16, text: "Fitness+ PR tour"},
                        id: "TIT2",
                        label: "Title/songname/content description"
@@ -346,13 +349,13 @@ defmodule Id3vxTest do
                  id: "CHAP",
                  label: "Chapters"
                },
-               %Id3vx.Frame{
+               %Frame{
                  data: %{
                    element_id: "chp10",
                    end_offset: 4_294_967_295,
                    end_time: 3_862_500,
                    frames: [
-                     %Id3vx.Frame{
+                     %Frame{
                        data: %{
                          encoding: :utf16,
                          text: "Rivian: physical vs. touch controls"
@@ -367,13 +370,13 @@ defmodule Id3vxTest do
                  id: "CHAP",
                  label: "Chapters"
                },
-               %Id3vx.Frame{
+               %Frame{
                  data: %{
                    element_id: "chp11",
                    end_offset: 4_294_967_295,
                    end_time: 4_851_575,
                    frames: [
-                     %Id3vx.Frame{
+                     %Frame{
                        data: %{
                          encoding: :utf16,
                          text: "Apple's new accessibility features"
@@ -381,7 +384,7 @@ defmodule Id3vxTest do
                        id: "TIT2",
                        label: "Title/songname/content description"
                      },
-                     %Id3vx.Frame{
+                     %Frame{
                        data: %{
                          description: "chapter url",
                          encoding: :iso8859_1,
@@ -398,18 +401,18 @@ defmodule Id3vxTest do
                  id: "CHAP",
                  label: "Chapters"
                },
-               %Id3vx.Frame{
+               %Frame{
                  data: %{
                    element_id: "chp12",
                    end_offset: 4_294_967_295,
                    end_time: 4_972_477,
                    frames: [
-                     %Id3vx.Frame{
+                     %Frame{
                        data: %{encoding: :utf16, text: "Sponsor: Squarespace (code ATP)"},
                        id: "TIT2",
                        label: "Title/songname/content description"
                      },
-                     %Id3vx.Frame{
+                     %Frame{
                        data: %{
                          description: "chapter url",
                          encoding: :iso8859_1,
@@ -425,13 +428,13 @@ defmodule Id3vxTest do
                  id: "CHAP",
                  label: "Chapters"
                },
-               %Id3vx.Frame{
+               %Frame{
                  data: %{
                    element_id: "chp13",
                    end_offset: 4_294_967_295,
                    end_time: 5_446_455,
                    frames: [
-                     %Id3vx.Frame{
+                     %Frame{
                        data: %{
                          encoding: :utf16,
                          text: "#askatp: Music app for concert albums"
@@ -446,13 +449,13 @@ defmodule Id3vxTest do
                  id: "CHAP",
                  label: "Chapters"
                },
-               %Id3vx.Frame{
+               %Frame{
                  data: %{
                    element_id: "chp14",
                    end_offset: 4_294_967_295,
                    end_time: 6_050_500,
                    frames: [
-                     %Id3vx.Frame{
+                     %Frame{
                        data: %{encoding: :utf16, text: "#askatp: Safari extensions"},
                        id: "TIT2",
                        label: "Title/songname/content description"
@@ -464,13 +467,13 @@ defmodule Id3vxTest do
                  id: "CHAP",
                  label: "Chapters"
                },
-               %Id3vx.Frame{
+               %Frame{
                  data: %{
                    element_id: "chp15",
                    end_offset: 4_294_967_295,
                    end_time: 6_498_350,
                    frames: [
-                     %Id3vx.Frame{
+                     %Frame{
                        data: %{
                          encoding: :utf16,
                          text: "#askatp: Remembering sign-in providers"
@@ -478,7 +481,7 @@ defmodule Id3vxTest do
                        id: "TIT2",
                        label: "Title/songname/content description"
                      },
-                     %Id3vx.Frame{
+                     %Frame{
                        data: %{
                          description: "chapter url",
                          encoding: :iso8859_1,
@@ -494,18 +497,18 @@ defmodule Id3vxTest do
                  id: "CHAP",
                  label: "Chapters"
                },
-               %Id3vx.Frame{
+               %Frame{
                  data: %{
                    element_id: "chp16",
                    end_offset: 4_294_967_295,
                    end_time: 6_560_500,
                    frames: [
-                     %Id3vx.Frame{
+                     %Frame{
                        data: %{encoding: :utf16, text: "Ending theme"},
                        id: "TIT2",
                        label: "Title/songname/content description"
                      },
-                     %Id3vx.Frame{
+                     %Frame{
                        data: %{
                          description: "chapter url",
                          encoding: :iso8859_1,
@@ -521,18 +524,18 @@ defmodule Id3vxTest do
                  id: "CHAP",
                  label: "Chapters"
                },
-               %Id3vx.Frame{
+               %Frame{
                  data: %{
                    element_id: "chp17",
                    end_offset: 4_294_967_295,
                    end_time: 7_421_089,
                    frames: [
-                     %Id3vx.Frame{
+                     %Frame{
                        data: %{encoding: :utf16, text: "Casey's fiber trunk"},
                        id: "TIT2",
                        label: "Title/songname/content description"
                      },
-                     %Id3vx.Frame{
+                     %Frame{
                        data: %{
                          description: "",
                          encoding: :iso8859_1,
@@ -549,22 +552,22 @@ defmodule Id3vxTest do
                  id: "CHAP",
                  label: "Chapters"
                },
-               %Id3vx.Frame{
+               %Frame{
                  data: %{encoding: :iso8859_1, text: "7421089"},
                  id: "TLEN",
                  label: "Length"
                },
-               %Id3vx.Frame{
+               %Frame{
                  data: %{encoding: :iso8859_1, text: "2022"},
                  id: "TYER",
                  label: nil
                },
-               %Id3vx.Frame{
+               %Frame{
                  data: %{encoding: :iso8859_1, text: "Forecast"},
                  id: "TENC",
                  label: "Encoded by"
                },
-               %Id3vx.Frame{
+               %Frame{
                  data: %{
                    description: "",
                    encoding: :iso8859_1,
@@ -590,23 +593,23 @@ defmodule Id3vxTest do
                unsynchronisation: false
              },
              frames: [
-               %Id3vx.Frame{
+               %Frame{
                  data: %{encoding: :utf16, text: "Maggie Tate"},
                  id: "TCOM"
                },
-               %Id3vx.Frame{
+               %Frame{
                  data: %{encoding: :utf16, text: "This video is about April 20"},
                  id: "TIT1"
                },
-               %Id3vx.Frame{
+               %Frame{
                  data: %{encoding: :utf16, text: "April 20"},
                  id: "TIT2"
                },
-               %Id3vx.Frame{
+               %Frame{
                  data: %{encoding: :utf16, text: "ProTranscoderTool (Apple MP3 v1"},
                  id: "TENC"
                },
-               %Id3vx.Frame{
+               %Frame{
                  data: %{
                    description: "image",
                    mime_type: "image/jpg"
@@ -614,58 +617,58 @@ defmodule Id3vxTest do
                  id: "APIC",
                  label: "Attached picture"
                },
-               %Id3vx.Frame{
+               %Frame{
                  id: "PCST"
                },
-               %Id3vx.Frame{
+               %Frame{
                  data: %{encoding: :utf16, text: "Beam Radio"},
                  id: "TALB"
                },
-               %Id3vx.Frame{
+               %Frame{
                  data: %{encoding: :utf16, text: "Podcast"},
                  id: "TCON"
                },
-               %Id3vx.Frame{
+               %Frame{
                  data: %{encoding: :utf16, text: "2022 Lars Wikman"},
                  id: "TCOP"
                },
-               %Id3vx.Frame{
+               %Frame{
                  data: %{encoding: :utf16, text: "2022-05-05 14:00:00 UTC"},
                  id: "TDRL"
                },
-               %Id3vx.Frame{
+               %Frame{
                  data: %{encoding: :utf16, text: "http://www.beamrad.io/32"},
                  id: "TGID"
                },
-               %Id3vx.Frame{
+               %Frame{
                  data: %{encoding: :utf16, text: "Beam Radio 32: Untitled Episode"},
                  id: "TIT2"
                },
-               %Id3vx.Frame{
+               %Frame{
                  data: %{encoding: :utf16, text: "2022"},
                  id: "TYER"
                },
-               %Id3vx.Frame{
+               %Frame{
                  data: %{url: "https://www.beamrad.io/rss"},
                  id: "WFED"
                },
-               %Id3vx.Frame{
+               %Frame{
                  data: %{url: "http://www.beamrad.io/32", description: "", encoding: :iso8859_1},
                  id: "WXXX"
                },
-               %Id3vx.Frame{
+               %Frame{
                  data: %{encoding: :utf16, text: "Lars Wikman"},
                  id: "TPE1"
                },
-               %Id3vx.Frame{
+               %Frame{
                  data: %{encoding: :utf16, text: "Lars Wikman"},
                  id: "TOPE"
                },
-               %Id3vx.Frame{
+               %Frame{
                  data: %{encoding: :utf16, text: "Lars Wikman"},
                  id: "TENC"
                },
-               %Id3vx.Frame{
+               %Frame{
                  data: %{encoding: :utf16, text: "Lars Wikman"},
                  id: "TPUB"
                }
@@ -686,7 +689,7 @@ defmodule Id3vxTest do
       version: 3,
       revision: 0,
       frames: [
-        %Id3vx.Frame{
+        %Frame{
           data: %{encoding: :utf16, text: "New tag"},
           id: "TIT1"
         }

@@ -94,10 +94,19 @@ defmodule Id3vx.Frame do
             label: nil,
             data: nil
 
+  alias Id3vx.Frame
+
+  @type t :: %Frame{
+          id: String.t(),
+          size: integer(),
+          flags: %Id3vx.FrameFlags{},
+          label: String.t(),
+          data: %{optional(any) => any}
+        }
+
   require Logger
 
   alias Id3vx.Error
-  alias Id3vx.Frame
   alias Id3vx.Tag
   alias Id3vx.Utils
 
@@ -107,6 +116,11 @@ defmodule Id3vx.Frame do
     0x02 => :utf16be,
     0x03 => :utf8
   }
+
+  @type text_encoding_v3 :: :iso8859_1 | :utf16
+  @type text_encoding_v4 :: :iso8859_1 | :utf16 | :utf16be | :utf8
+
+  def text_encodings, do: @text_encoding
 
   @picture_type %{
     0x00 => :other,
@@ -131,6 +145,34 @@ defmodule Id3vx.Frame do
     0x13 => :band_logotype,
     0x14 => :studio_logotype
   }
+
+  @type picture_type ::
+          :other
+          | :basic_file_icon
+          | :other_file_icon
+          | :cover
+          | :cover_back
+          | :leaflet_page
+          | :media
+          | :lead_artist
+          | :artist
+          | :conductor
+          | :band
+          | :composer
+          | :lyricist
+          | :recording_location
+          | :during_recording
+          | :during_performance
+          | :video_capture
+          | :a_bright_coloured_fish
+          | :illustration
+          | :band_logotype
+          | :studio_logotype
+
+  def picture_types, do: @picture_type
+
+  @spec encode_frame(Frame.t(), Id3vx.Tag.t()) :: binary()
+  def encode_frame(frame, tag)
 
   def encode_frame(%Frame{id: "CHAP"} = frame, %{version: 3} = tag) do
     %{
@@ -245,17 +287,18 @@ defmodule Id3vx.Frame do
     IO.iodata_to_binary([header, frame_binary])
   end
 
-  def encode_frame(%Frame{data: %{status: :not_implemented}} = frame, %{version: 3} = tag) do
-    frame_size = byte_size(frame.data.raw_data)
+  def encode_frame(%Frame{data: %Frame.Unknown{raw_data: raw}} = frame, %{version: 3} = tag) do
+    frame_size = byte_size(raw)
     header = encode_header(frame, frame_size, tag)
-    IO.iodata_to_binary([header, frame.data.raw_data])
+    IO.iodata_to_binary([header, raw])
   end
 
   def encode_frame(%Frame{} = frame, tag) do
-    raise Error,
+    throw(%Error{
       message:
         "Unknown frame '#{frame.id}', not implemented for encoding and missing the raw data to be blindly re-encoded",
       context: {:frame, frame, tag}
+    })
   end
 
   def encode_header(%Frame{id: id, flags: _flags}, size, %{version: 3}) do
@@ -264,6 +307,14 @@ defmodule Id3vx.Frame do
     size = Utils.pad_to_byte_size(size, 4)
     [id, size, flags]
   end
+
+  @spec parse(
+          id :: binary(),
+          tag :: Tag.t(),
+          flags :: term(),
+          data :: binary()
+        ) :: Frame.t()
+  def parse(id, tag, flags, data)
 
   def parse("APIC" = id, _tag, _flags, data) do
     <<encoding::size(8), rest::binary>> = data
@@ -277,7 +328,7 @@ defmodule Id3vx.Frame do
 
     %Frame{
       id: id,
-      data: %{
+      data: %Frame.AttachedPicture{
         encoding: encoding,
         mime_type: mime_type,
         picture_type: picture_type,
@@ -297,7 +348,7 @@ defmodule Id3vx.Frame do
 
     %Frame{
       id: id,
-      data: %{
+      data: %Frame.Chapter{
         element_id: element_id,
         start_time: start_time,
         end_time: end_time,
@@ -380,7 +431,7 @@ defmodule Id3vx.Frame do
 
     %Frame{
       id: id,
-      data: %{encoding: encoding, text: text}
+      data: %Frame.Text{encoding: encoding, text: text}
     }
   end
 
@@ -396,7 +447,7 @@ defmodule Id3vx.Frame do
 
     %Frame{
       id: id,
-      data: %{
+      data: %Frame.CustomURL{
         encoding: encoding,
         description: description,
         url: url
@@ -416,7 +467,7 @@ defmodule Id3vx.Frame do
 
     %Frame{
       id: id,
-      data: %{
+      data: %Frame.URL{
         url: url
       }
     }
@@ -426,7 +477,7 @@ defmodule Id3vx.Frame do
     %Frame{
       id: id,
       label: "#{id} is not implemented, please contribute, it's not hard.",
-      data: %{status: :not_implemented, raw_data: data}
+      data: %Frame.Unknown{raw_data: data}
     }
   end
 

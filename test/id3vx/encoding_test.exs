@@ -70,9 +70,13 @@ defmodule Id3vx.EncodingTest do
       assert num1 == num2
     end
 
-    assert_raise(Id3vx.Error, fn ->
+    try do
       Id3vx.encode_synchsafe_integer(max)
-    end)
+      refute true
+    catch
+      e ->
+        assert %Id3vx.Error{} = e
+    end
   end
 
   test "v2.3 encoding CHAP frame" do

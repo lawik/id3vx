@@ -7,20 +7,6 @@ defmodule Id3vx do
   use Bitwise
   require Logger
 
-  defmodule Tag do
-    @moduledoc """
-    The base data structure for the ID3 tag.
-    """
-
-    defstruct version: nil,
-              revision: nil,
-              flags: nil,
-              size: nil,
-              extended_header: nil,
-              footer: nil,
-              frames: nil
-  end
-
   defmodule TagFlags do
     @moduledoc false
     defstruct unsynchronisation: nil, extended_header: nil, experimental: nil, footer: nil
@@ -55,6 +41,30 @@ defmodule Id3vx do
               data_length_indicator: nil
   end
 
+  defmodule Tag do
+    @moduledoc """
+    The base data structure for the ID3 tag.
+    """
+
+    defstruct version: nil,
+              revision: nil,
+              flags: nil,
+              size: nil,
+              extended_header: nil,
+              footer: nil,
+              frames: nil
+
+    @type t :: %__MODULE__{
+            version: 3 | 4,
+            revision: integer(),
+            flags: %Id3vx.TagFlags{},
+            size: integer(),
+            extended_header: %Id3vx.ExtendedHeaderV3{} | %Id3vx.ExtendedHeaderV4{},
+            footer: term(),
+            frames: [Id3vx.Frame.t()]
+          }
+  end
+
   alias Id3vx.Tag
   alias Id3vx.TagFlags
   alias Id3vx.ExtendedHeaderV4
@@ -64,7 +74,6 @@ defmodule Id3vx do
   alias Id3vx.Frame
   alias Id3vx.FrameFlags
   alias Id3vx.Frame.Labels
-  alias Id3vx.Utils
 
   @parse_states [
     :parse_prepend_tag,
@@ -84,37 +93,48 @@ defmodule Id3vx do
   It will open the file read-only and only read as many bytes as
   necessary.
 
-  Returns an `Id3vx.Tag` struct or raises an `Id3vx.Error`.
+  Returns an `Id3vx.Tag` struct or throws an `Id3vx.Error`.
   """
+  @spec parse_file!(path :: String.t()) :: Tag.t()
   def parse_file!(path) do
-    case File.open(path, [:read, :binary]) do
-      {:ok, device} ->
-        parse_io(device)
+    try do
+      case File.open(path, [:read, :binary]) do
+        {:ok, device} ->
+          parse_io(device)
 
-      {:error, e} ->
-        raise Error,
-          message: "Could not load file '#{inspect(path)}', error: #{inspect(e)}",
-          context: {:file_open, e}
+        {:error, e} ->
+          throw(%Error{
+            message: "Could not load file '#{inspect(path)}', error: #{inspect(e)}",
+            context: {:file_open, e}
+          })
+      end
+    catch
+      e -> raise e
     end
   end
 
+  @spec parse_file(path :: String.t()) :: {:ok, Tag.t()} | {:error, %Error{}}
   def parse_file(path) do
     try do
       {:ok, parse_file!(path)}
-    rescue
-      e in Error -> {:error, e}
+    catch
+      e -> {:error, e}
     end
   end
 
   def parse_binary!(<<binary::binary>>) do
-    parse({<<>>, binary})
+    try do
+      parse({<<>>, binary})
+    catch
+      e -> raise e
+    end
   end
 
   def parse_binary(binary) do
     try do
       {:ok, parse_binary!(binary)}
-    rescue
-      e in Error -> {:error, e}
+    catch
+      e -> {:error, e}
     end
   end
 
@@ -125,8 +145,8 @@ defmodule Id3vx do
   def replace_tag(%Tag{} = tag, infile_path, outfile_path) do
     try do
       replace_tag!(tag, infile_path, outfile_path)
-    rescue
-      e in Error -> {:error, e}
+    catch
+      e -> {:error, e}
     end
   end
 
@@ -181,7 +201,7 @@ defmodule Id3vx do
 
   @doc false
   def encode_frames(%Tag{frames: []}) do
-    raise Error, message: "Cannot generate an empty ID3 tag"
+    throw(%Error{message: "Cannot generate an empty ID3 tag"})
   end
 
   @doc false
@@ -227,7 +247,7 @@ defmodule Id3vx do
         end
 
       :not_found ->
-        raise Error, message: "Tag not found", context: :parse_prepend_tag
+        throw(%Error{message: "Tag not found", context: :parse_prepend_tag})
     end
   end
 
@@ -248,9 +268,10 @@ defmodule Id3vx do
 
         3 ->
           if tag.flags.unsynchronisation do
-            raise Error,
+            throw(%Error{
               message: "v3 unsynchronization not implemented!",
               context: :parse_extended_header
+            })
           end
 
           get_bytes(source, ext_header.size - 6)
@@ -308,7 +329,7 @@ defmodule Id3vx do
     if tag.flags.footer do
       {:parse_footer, source, tag}
     else
-      {:skip_padding, source, tag}
+      {:done, tag}
     end
   end
 
@@ -400,14 +421,11 @@ defmodule Id3vx do
 
     flags = parse_frame_flags(flags)
 
-    {frames, continue?} =
-      case parse_frame(tag, id, decoded_frame_size, flags, frame_data) do
-        {:frame, frame} -> {[frame | frames], true}
-        :not_found -> {frames, false}
-      end
+    frame = parse_frame(tag, id, decoded_frame_size, flags, frame_data)
+    frames = [frame | frames]
 
     # Does it contain enough data for another frame?
-    if continue? and byte_size(frames_data) > 10 do
+    if byte_size(frames_data) > 10 do
       parse_frames(tag, frames_data, frames)
     else
       Enum.reverse(frames)
@@ -422,7 +440,7 @@ defmodule Id3vx do
 
     frame_size = :binary.decode_unsigned(frame_size, :big)
 
-    {frames_data, frames, continue?} =
+    {frames_data, frames} =
       cond do
         not Regex.match?(~r/[A-Z0-9]{4}/, id) ->
           Logger.warn("Invalid frame ID. Weird.")
@@ -441,17 +459,13 @@ defmodule Id3vx do
 
           flags = parse_frame_flags(flags)
 
-          case parse_frame(tag, id, frame_size, flags, frame_data) do
-            {:frame, frame} ->
-              {frames_data, [frame | frames], true}
-
-            :not_found ->
-              {frames_data, frames, false}
-          end
+          frame = parse_frame(tag, id, frame_size, flags, frame_data)
+          frames = [frame | frames]
+          {frames_data, frames}
       end
 
     # Does it contain enough data for another frame?
-    if continue? and byte_size(frames_data) > 10 do
+    if byte_size(frames_data) > 10 do
       parse_frames(tag, frames_data, frames)
     else
       Enum.reverse(frames)
@@ -475,7 +489,7 @@ defmodule Id3vx do
 
   def parse_frame(%{version: 3} = tag, id, size, flags, data) do
     frame = Frame.parse(id, tag, flags, data)
-    {:frame, %{frame | size: size, flags: flags, label: Labels.from_id(frame.id)}}
+    %{frame | size: size, flags: flags, label: Labels.from_id(frame.id)}
   end
 
   def parse_frame(%Tag{version: 4} = tag, id, size, flags, data) do
@@ -487,7 +501,7 @@ defmodule Id3vx do
       end
 
     frame = Frame.parse(id, tag, flags, data)
-    {:frame, %{frame | size: size, flags: flags}}
+    %{frame | size: size, flags: flags}
   end
 
   defp subtract_extended_header(size, %{
@@ -511,9 +525,10 @@ defmodule Id3vx do
 
   def encode_synchsafe_integer(num) do
     if num > 256 * 1024 * 1024 - 1 do
-      raise Error,
+      throw(%Error{
         message: "Cannot encode synchsafe integer larger than 256*1024*1024 (256 Mb in bytes)",
         context: :encode_synchsafe_integer
+      })
     end
 
     binary_num = <<num::size(28)>>
@@ -544,14 +559,14 @@ defmodule Id3vx do
     <<0xFF::8, 0x00::8, third::8>> = sample
 
     fixed =
-      case third do
+      case <<third::8>> do
         <<1::3, bits::5>> ->
           <<0xFF, 1::3, bits::5>>
 
         <<0::8>> ->
           <<0xFF, 0x00>>
 
-        any ->
+        <<any::8>> ->
           <<0xFF, 0x00, any>>
       end
 
