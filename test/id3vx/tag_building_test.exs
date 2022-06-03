@@ -77,9 +77,8 @@ defmodule Id3vx.TagBuilderTest do
            } = Tag.find_element(tag, "CTOC", "toc")
 
     # Check that it encodes and re-parses
-    # TODO: Currently missing APIC encoding
-    # binary = Id3vx.encode_tag(tag)
-    # tag = Id3vx.parse_binary!(binary)
+    binary = Id3vx.encode_tag(tag)
+    tag = Id3vx.parse_binary!(binary)
 
     assert %Tag{
              frames: [
@@ -123,14 +122,13 @@ defmodule Id3vx.TagBuilderTest do
                      %Id3vx.Frame{
                        data: %Id3vx.Frame.Text{
                          encoding: :utf16,
-                         text: ["Chapter publisher"]
+                         text: "Chapter publisher"
                        },
                        id: "TPUB",
-                       label: "Publisher",
-                       size: nil
+                       label: "Publisher"
                      },
                      %Id3vx.Frame{
-                       data: %Id3vx.Frame.Text{encoding: :utf16, text: ["Chapter 1"]},
+                       data: %Id3vx.Frame.Text{encoding: :utf16, text: "Chapter 1"},
                        id: "TIT2"
                      }
                    ],
@@ -158,12 +156,12 @@ defmodule Id3vx.TagBuilderTest do
                      %Id3vx.Frame{
                        data: %Id3vx.Frame.Text{
                          encoding: :utf16,
-                         text: ["Chapter publisher"]
+                         text: "Chapter publisher"
                        },
                        id: "TPUB"
                      },
                      %Id3vx.Frame{
-                       data: %Id3vx.Frame.Text{encoding: :utf16, text: ["Chapter 2"]},
+                       data: %Id3vx.Frame.Text{encoding: :utf16, text: "Chapter 2"},
                        id: "TIT2"
                      }
                    ],
@@ -191,12 +189,12 @@ defmodule Id3vx.TagBuilderTest do
                      %Id3vx.Frame{
                        data: %Id3vx.Frame.Text{
                          encoding: :utf16,
-                         text: ["Chapter publisher"]
+                         text: "Chapter publisher"
                        },
                        id: "TPUB"
                      },
                      %Id3vx.Frame{
-                       data: %Id3vx.Frame.Text{encoding: :utf16, text: ["Chapter 3"]},
+                       data: %Id3vx.Frame.Text{encoding: :utf16, text: "Chapter 3"},
                        id: "TIT2"
                      }
                    ],

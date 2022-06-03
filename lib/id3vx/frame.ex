@@ -525,14 +525,15 @@ defmodule Id3vx.Frame do
     {first, rest}
   end
 
-  defp get_null_byte(encoding) do 
-    case encoding do 
+  defp get_null_byte(encoding) do
+    case encoding do
       :iso8859_1 ->
         <<0>>
-      :utf16 -> 
-          <<0,0>>  
-    end 
-  end 
+
+      :utf16 ->
+        <<0, 0>>
+    end
+  end
 
   defp split_at_null(encoding, data) do
     case encoding do
@@ -551,13 +552,23 @@ defmodule Id3vx.Frame do
   end
 
   defp split_at_next_null(data) do
-    [pre, post] = :binary.split(data, <<0>>)
-    {pre, post}
+    case :binary.split(data, <<0>>) do
+      [pre, post] ->
+        {pre, post}
+
+      [pre] ->
+        {pre, <<>>}
+    end
   end
 
   defp split_at_next_double_null(data) do
-    [pre, post] = :binary.split(data, <<0, 0>>)
-    {pre, post}
+    case :binary.split(data, <<0, 0>>) do
+      [pre, post] ->
+        {pre, post}
+
+      [pre] ->
+        {pre, <<>>}
+    end
   end
 
   def parse_encoded_text(encoding, data) do
