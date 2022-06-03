@@ -214,4 +214,34 @@ defmodule Id3vx.EncodingTest do
     assert <<0x01::size(8), frame_text::binary>> = sub_frame1
     assert encoded_text == frame_text
   end
+
+  test "v2.3 encoding APIC frame" do
+    frame = %Frame{
+      id: "APIC",
+      data: %Frame.AttachedPicture{
+        encoding: :utf16,
+        mime_type: "image/png",
+        picture_type: :cover,
+        description: "it's a description",
+        image_data: <<24, 32>>
+      }
+    }
+
+    binary = Frame.encode_frame(frame, %Tag{version: 3})
+    assert <<frame_header::binary-size(10), frame_data::binary>> = binary
+    assert <<"APIC", frame_size::size(32), _flags::binary-size(2)>> = frame_header
+    assert 34 == frame_size
+
+    assert <<0x01::size(8), frame_rest::binary>> = frame_data
+
+    [mime_type, frame_rest] = :binary.split(frame_rest, <<0>>)
+    assert mime_type == "image/png"
+    [pre, post] = :binary.split(frame_rest, <<0, 0>>)
+    assert <<0x03, description::binary>> = pre
+
+    assert description == frame.data.description
+    image_data = post
+
+    assert image_data == frame.data.image_data
+  end
 end

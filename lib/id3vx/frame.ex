@@ -287,6 +287,38 @@ defmodule Id3vx.Frame do
     IO.iodata_to_binary([header, frame_binary])
   end
 
+  def encode_frame(%Frame{id: "APIC"} = frame, %{version: 3} = tag) do
+    %Frame.AttachedPicture{
+      encoding: encoding,
+      mime_type: mime_type,
+      picture_type: picture_type,
+      description: description,
+      image_data: image_data
+    } = frame.data
+
+    encoding_byte = get_encoding_byte(encoding)
+    null_byte = get_null_byte(encoding)
+
+    picture_type =
+      @picture_type
+      |> Utils.flip_map()
+      |> Map.get(picture_type)
+
+    frame_binary = [
+      <<encoding_byte>>,
+      mime_type,
+      <<0>>,
+      picture_type,
+      description,
+      null_byte,
+      image_data
+    ]
+
+    frame_size = IO.iodata_length(frame_binary)
+    header = encode_header(frame, frame_size, tag)
+    IO.iodata_to_binary([header, frame_binary])
+  end
+
   def encode_frame(%Frame{data: %Frame.Unknown{raw_data: raw}} = frame, %{version: 3} = tag) do
     frame_size = byte_size(raw)
     header = encode_header(frame, frame_size, tag)
@@ -493,6 +525,15 @@ defmodule Id3vx.Frame do
     {first, rest}
   end
 
+  defp get_null_byte(encoding) do 
+    case encoding do 
+      :iso8859_1 ->
+        <<0>>
+      :utf16 -> 
+          <<0,0>>  
+    end 
+  end 
+
   defp split_at_null(encoding, data) do
     case encoding do
       :iso8859_1 ->
@@ -585,5 +626,11 @@ defmodule Id3vx.Frame do
   defp get_double_null_terminated(<<a::size(8), b::size(8), rest::binary>>, max_byte_size, acc) do
     next_max_byte_size = max_byte_size - 2
     get_double_null_terminated(rest, next_max_byte_size, [b, a | acc])
+  end
+
+  defp get_encoding_byte(encoding) do
+    @text_encoding
+    |> Utils.flip_map()
+    |> Map.get(encoding)
   end
 end
