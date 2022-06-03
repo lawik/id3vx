@@ -210,4 +210,39 @@ defmodule Id3vx.TagBuilderTest do
              version: 3
            } = tag
   end
+
+  test "v2.3 delete chapter frame" do
+    tag =
+      Tag.create(3)
+      |> Tag.add_typical_chapter_and_toc(
+        0,
+        20,
+        0,
+        1024,
+        "Chapter 1",
+        fn chapter ->
+          chapter
+          |> Tag.add_text_frame("TPUB", "Chapter publisher")
+          # Not a real picture
+          |> Tag.add_attached_picture("", "image/jpeg", <<255, 0, 255>>)
+        end
+      )
+      |> Tag.add_typical_chapter_and_toc(
+        21,
+        40,
+        1025,
+        2048,
+        "Chapter 2",
+        fn chapter ->
+          chapter
+          |> Tag.add_text_frame("TPUB", "Chapter publisher")
+          |> Tag.add_attached_picture("", "image/jpeg", <<255, 0, 255>>)
+        end
+      )
+      |> Tag.delete_chapter("chp1")
+
+    assert length(tag.frames) == 2
+    assert %{frames: [ctoc | _]} = tag
+    assert length(ctoc.data.child_elements) == 1
+  end
 end

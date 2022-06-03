@@ -220,4 +220,42 @@ defmodule Id3vx.Tag do
       end
     end)
   end
+
+  @spec delete_elements(container :: map(), frame_id :: String.t()) :: map()
+  def delete_elements(container, frame_id) do
+    frames =
+      Enum.reject(container.frames, fn f ->
+        f.id == frame_id
+      end)
+
+    %{container | frames: frames}
+  end
+
+  @spec delete_chapter(container :: map(), element_id :: String.t()) ::
+          map()
+  def delete_chapter(container, element_id) do
+    # Remove ToC element child for chapter
+    container =
+      change_element(container, "CTOC", "toc", fn d ->
+        els =
+          Enum.reject(d.child_elements, fn e ->
+            e == element_id
+          end)
+
+        %{d | child_elements: els}
+      end)
+
+    frames =
+      Enum.reject(container.frames, fn f ->
+        case f do
+          %{id: "CHAP", data: %Frame.Chapter{element_id: ^element_id}} ->
+            true
+
+          _ ->
+            false
+        end
+      end)
+
+    %{container | frames: frames}
+  end
 end
