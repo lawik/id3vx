@@ -7,64 +7,6 @@ defmodule Id3vx do
   use Bitwise
   require Logger
 
-  defmodule TagFlags do
-    @moduledoc false
-    defstruct unsynchronisation: nil, extended_header: nil, experimental: nil, footer: nil
-  end
-
-  defmodule ExtendedHeaderV4 do
-    @moduledoc false
-    defstruct size: nil, flag_bytes: nil, flags: nil
-  end
-
-  defmodule ExtendedHeaderV3 do
-    @moduledoc false
-    defstruct size: nil, flags: nil, padding: nil
-  end
-
-  defmodule ExtendedHeaderFlags do
-    @moduledoc false
-    defstruct is_update: nil,
-              crc_data_present: nil,
-              tag_restrictions: nil
-  end
-
-  defmodule FrameFlags do
-    @moduledoc false
-    defstruct tag_alter_preservation: nil,
-              file_alter_preservation: nil,
-              read_only: nil,
-              grouping_identity: nil,
-              compression: nil,
-              encryption: nil,
-              unsynchronisation: nil,
-              data_length_indicator: nil
-  end
-
-  defmodule Tag do
-    @moduledoc """
-    The base data structure for the ID3 tag.
-    """
-
-    defstruct version: nil,
-              revision: nil,
-              flags: nil,
-              size: nil,
-              extended_header: nil,
-              footer: nil,
-              frames: nil
-
-    @type t :: %__MODULE__{
-            version: 3 | 4,
-            revision: integer(),
-            flags: %Id3vx.TagFlags{},
-            size: integer(),
-            extended_header: %Id3vx.ExtendedHeaderV3{} | %Id3vx.ExtendedHeaderV4{},
-            footer: term(),
-            frames: [Id3vx.Frame.t()]
-          }
-  end
-
   alias Id3vx.Tag
   alias Id3vx.TagFlags
   alias Id3vx.ExtendedHeaderV4
@@ -226,9 +168,6 @@ defmodule Id3vx do
   end
 
   defp iterate(source, step, state) do
-    state_number = Enum.find_index(@parse_states, fn s -> s == step end) + 1
-    Logger.debug("Parser step ##{state_number}: #{step}")
-
     case parse_step(source, step, state) do
       {:done, result} -> result
       {next_step, source, state} -> iterate(source, next_step, state)

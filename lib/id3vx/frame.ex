@@ -382,7 +382,7 @@ defmodule Id3vx.Frame do
 
     %Frame{
       id: id,
-      data: %{
+      data: %Frame.TableOfContents{
         element_id: element_id,
         top_level: top_level == 1,
         ordered: ordered == 1,
