@@ -286,6 +286,7 @@ defmodule Id3vx.EncodingTest do
 
     binary = Frame.encode_frame(frame, %Tag{version: 3})
     assert <<frame_header::binary-size(10), frame_data::binary>> = binary
+
     assert <<"COMM", frame_size::size(32), _flags::binary-size(2)>> = frame_header
     assert 39 == frame_size
 
@@ -296,5 +297,56 @@ defmodule Id3vx.EncodingTest do
 
     assert content_description == frame.data.content_description
     assert content_text = frame.data.content_text
+  end
+
+  test "v2.3 encoding url frames" do
+    frame = %Frame{
+      id: "WCOM",
+      flags: %FrameFlags{},
+      data: %Frame.URL{
+        url: "https://example.com"
+      }
+    }
+
+    binary = Frame.encode_frame(frame, %Tag{version: 3})
+    assert <<frame_header::binary-size(10), frame_data::binary>> = binary
+    assert <<"WCOM", frame_size::size(32), _flags::binary-size(2)>> = frame_header
+    assert 19 == frame_size
+    assert frame.data.url == frame_data
+
+    frame = %Frame{
+      id: "WCOP",
+      flags: %FrameFlags{},
+      data: %Frame.URL{
+        url: "https://example.com"
+      }
+    }
+
+    binary = Frame.encode_frame(frame, %Tag{version: 3})
+    assert <<frame_header::binary-size(10), frame_data::binary>> = binary
+    assert <<"WCOP", frame_size::size(32), _flags::binary-size(2)>> = frame_header
+    assert 19 == frame_size
+    assert frame.data.url == frame_data
+  end
+
+  test "v2.3 encoding WXXX frame" do
+    frame = %Frame{
+      id: "WXXX",
+      flags: %FrameFlags{},
+      data: %Frame.CustomURL{
+        encoding: :utf16,
+        description: "it's a custom description",
+        url: "https://example.com"
+      }
+    }
+
+    binary = Frame.encode_frame(frame, %Tag{version: 3})
+    assert <<frame_header::binary-size(10), frame_data::binary>> = binary
+    assert <<"WXXX", frame_size::size(32), _flags::binary-size(2)>> = frame_header
+    assert 47 == frame_size
+    assert <<0x01::size(8), frame_rest::binary>> = frame_data
+    [description, url] = :binary.split(frame_rest, <<0, 0>>)
+    assert description = frame.data.description
+    assert url == frame.data.url
   end
 end
