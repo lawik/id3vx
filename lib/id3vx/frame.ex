@@ -433,10 +433,42 @@ defmodule Id3vx.Frame do
 
     encoding_byte = get_encoding_byte(encoding)
     null_byte = get_null_byte(encoding)
+
     content_description = convert_string(encoding, content_description)
     content_text = convert_string(encoding, content_text)
 
     frame_binary = [<<encoding_byte>>, language, content_description, null_byte, content_text]
+
+    frame_size = IO.iodata_length(frame_binary)
+    header = encode_header(frame, frame_size, tag)
+    IO.iodata_to_binary([header, frame_binary])
+  end
+
+  def encode_frame(%Frame{id: "WXXX"} = frame, %{version: 3} = tag) do
+    %Frame.CustomURL{
+      encoding: encoding,
+      description: description,
+      url: url
+    } = frame.data
+
+    encoding_byte = get_encoding_byte(encoding)
+    null_byte = get_null_byte(encoding)
+    url = convert_string(:iso8859_1, url)
+    description = convert_string(encoding, description)
+    frame_binary = [<<encoding_byte>>, description, null_byte, url]
+
+    frame_size = IO.iodata_length(frame_binary)
+    header = encode_header(frame, frame_size, tag)
+    IO.iodata_to_binary([header, frame_binary])
+  end
+
+  def encode_frame(%Frame{id: "W" <> _} = frame, %{version: 3} = tag) do
+    %Frame.URL{
+      url: url
+    } = frame.data
+
+    url = convert_string(:iso8859_1, url)
+    frame_binary = [url]
     frame_size = IO.iodata_length(frame_binary)
     header = encode_header(frame, frame_size, tag)
     IO.iodata_to_binary([header, frame_binary])
