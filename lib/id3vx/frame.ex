@@ -417,6 +417,31 @@ defmodule Id3vx.Frame do
     IO.iodata_to_binary([header, frame_binary])
   end
 
+  def encode_frame(%Frame{data: %Frame.Unknown{}} = frame, %{version: 3} = tag) do
+    frame_size = byte_size(frame.raw_data)
+    header = encode_header(frame, frame_size, tag)
+    IO.iodata_to_binary([header, frame.raw_data])
+  end
+
+  def encode_frame(%Frame{id: "COMM"} = frame, %{version: 3} = tag) do
+    %Frame.Comment{
+      encoding: encoding,
+      language: language,
+      content_description: content_description,
+      content_text: content_text
+    } = frame.data
+
+    encoding_byte = get_encoding_byte(encoding)
+    null_byte = get_null_byte(encoding)
+    content_description = convert_string(encoding, content_description)
+    content_text = convert_string(encoding, content_text)
+
+    frame_binary = [<<encoding_byte>>, language, content_description, null_byte, content_text]
+    frame_size = IO.iodata_length(frame_binary)
+    header = encode_header(frame, frame_size, tag)
+    IO.iodata_to_binary([header, frame_binary])
+  end
+
   def encode_frame(%Frame{raw_data: raw} = frame, tag) do
     if frame.flags.tag_alter_preservation do
       # According to spec, discard unknown frame if flag is set for it and tag is modified
