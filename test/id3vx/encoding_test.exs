@@ -271,4 +271,30 @@ defmodule Id3vx.EncodingTest do
 
     assert <<"20220602", "Underjord AB">> = rest
   end
+
+  test "v2.3 encoding COMM frame" do
+    frame = %Frame{
+      id: "COMM",
+      flags: %FrameFlags{},
+      data: %Frame.Comment{
+        encoding: :utf16,
+        language: "english",
+        content_description: "foobarbaz",
+        content_text: "it's about foobarbaz"
+      }
+    }
+
+    binary = Frame.encode_frame(frame, %Tag{version: 3})
+    assert <<frame_header::binary-size(10), frame_data::binary>> = binary
+    assert <<"COMM", frame_size::size(32), _flags::binary-size(2)>> = frame_header
+    assert 39 == frame_size
+
+    assert <<0x01::size(8), frame_rest::binary>> = frame_data
+    assert <<"english", frame_rest::binary>> = frame_rest
+
+    [content_description, content_text] = :binary.split(frame_rest, <<0>>)
+
+    assert content_description == frame.data.content_description
+    assert content_text = frame.data.content_text
+  end
 end
