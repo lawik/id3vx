@@ -1,9 +1,9 @@
 defmodule Id3vx.Frame.Unknown do
-  defstruct raw_data: nil
+  defstruct unused: nil
 
   alias Id3vx.Frame.Unknown
 
   @type t :: %Unknown{
-          raw_data: binary()
+          unused: term()
         }
 end

@@ -149,7 +149,11 @@ defmodule Id3vx do
   @doc false
   def encode_frames(%Tag{frames: frames} = tag) do
     Enum.reduce(frames, <<>>, fn frame, acc ->
-      acc <> Frame.encode_frame(frame, tag)
+      try do
+        acc <> Frame.encode_frame(frame, tag)
+      catch
+        :discard_frame -> acc
+      end
     end)
   end
 
@@ -428,7 +432,7 @@ defmodule Id3vx do
 
   def parse_frame(%{version: 3} = tag, id, size, flags, data) do
     frame = Frame.parse(id, tag, flags, data)
-    %{frame | size: size, flags: flags, label: Labels.from_id(frame.id)}
+    %{frame | size: size, flags: flags, label: Labels.from_id(frame.id), raw_data: data}
   end
 
   def parse_frame(%Tag{version: 4} = tag, id, size, flags, data) do
@@ -440,7 +444,7 @@ defmodule Id3vx do
       end
 
     frame = Frame.parse(id, tag, flags, data)
-    %{frame | size: size, flags: flags}
+    %{frame | size: size, flags: flags, raw_data: data}
   end
 
   defp subtract_extended_header(size, %{

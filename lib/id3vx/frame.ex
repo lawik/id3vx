@@ -92,7 +92,8 @@ defmodule Id3vx.Frame do
             flags: nil,
             # "Payment", "Album sort order", "Title/songname/content description"
             label: nil,
-            data: nil
+            data: nil,
+            raw_data: nil
 
   alias Id3vx.Frame
 
@@ -173,6 +174,46 @@ defmodule Id3vx.Frame do
 
   @spec encode_frame(Frame.t(), Id3vx.Tag.t()) :: binary()
   def encode_frame(frame, tag)
+
+  def encode_frame(
+        %Frame{id: id, flags: %{read_only: true}, raw_data: raw} = frame,
+        %{version: 3} = tag
+      ) do
+    # Encode unmodified raw
+    Logger.info(
+      "Disregarding any edits to #{id} as it is flagged read_only. Re-using original data."
+    )
+
+    frame_size = byte_size(raw)
+    header = encode_header(frame, frame_size, tag)
+    IO.iodata_to_binary([header, raw])
+  end
+
+  def encode_frame(
+        %Frame{flags: %{compression: true}} = frame,
+        %{version: 3} = tag
+      ) do
+    # Encode as if uncompressed, toss out the header we get
+    <<_header::binary-size(10), uncompressed_data::binary>> =
+      encode_frame(%{frame | flags: %{frame.flags | compression: false}}, tag)
+
+    uncompressed_size = byte_size(uncompressed_data)
+    IO.inspect(uncompressed_size, label: "uncompressed size")
+
+    z = :zlib.open()
+    :zlib.deflateInit(z)
+
+    compressed_data = :zlib.deflate(z, uncompressed_data) |> IO.iodata_to_binary()
+
+    :zlib.close(z)
+
+    full_data = <<uncompressed_size::32>> <> compressed_data
+
+    compressed_size = byte_size(full_data)
+
+    header = encode_header(frame, compressed_size, tag)
+    IO.iodata_to_binary([header, full_data])
+  end
 
   def encode_frame(%Frame{id: "CHAP"} = frame, %{version: 3} = tag) do
     %{
@@ -319,10 +360,10 @@ defmodule Id3vx.Frame do
     IO.iodata_to_binary([header, frame_binary])
   end
 
-  def encode_frame(%Frame{data: %Frame.Unknown{raw_data: raw}} = frame, %{version: 3} = tag) do
-    frame_size = byte_size(raw)
+  def encode_frame(%Frame{data: %Frame.Unknown{}} = frame, %{version: 3} = tag) do
+    frame_size = byte_size(frame.raw_data)
     header = encode_header(frame, frame_size, tag)
-    IO.iodata_to_binary([header, raw])
+    IO.iodata_to_binary([header, frame.raw_data])
   end
 
   def encode_frame(%Frame{id: "OWNE"} = frame, %{version: 3} = tag) do
@@ -346,23 +387,21 @@ defmodule Id3vx.Frame do
     IO.iodata_to_binary([header, frame_binary])
   end
 
-  def encode_frame(%Frame{data: %Frame.Unknown{raw_data: raw}} = frame, %{version: 3} = tag) do
-    frame_size = byte_size(raw)
-    header = encode_header(frame, frame_size, tag)
-    IO.iodata_to_binary([header, raw])
+  def encode_frame(%Frame{raw_data: raw} = frame, tag) do
+    if frame.flags.tag_alter_preservation do
+      # According to spec, discard unknown frame if flag is set for it and tag is modified
+      throw(:discard_frame)
+    else
+      frame_size = byte_size(raw)
+      header = encode_header(frame, frame_size, tag)
+      IO.iodata_to_binary([header, raw])
+    end
   end
 
-  def encode_frame(%Frame{} = frame, tag) do
-    throw(%Error{
-      message:
-        "Unknown frame '#{frame.id}', not implemented for encoding and missing the raw data to be blindly re-encoded",
-      context: {:frame, frame, tag}
-    })
-  end
-
-  def encode_header(%Frame{id: id, flags: _flags}, size, %{version: 3}) do
-    # TODO: Encode flags properly
-    flags = <<0x00, 0x00>>
+  def encode_header(%Frame{id: id, flags: flags}, size, %{version: 3} = tag) do
+    # flags = <<0x00, 0x00>>
+    flags = Id3vx.FrameFlags.as_binary(flags, tag)
+    IO.inspect(flags, base: :binary)
     size = Utils.pad_to_byte_size(size, 4)
     [id, size, flags]
   end
@@ -374,6 +413,19 @@ defmodule Id3vx.Frame do
           data :: binary()
         ) :: Frame.t()
   def parse(id, tag, flags, data)
+
+  def parse(id, %{version: 3} = tag, %{compression: true} = flags, data) do
+    <<_decompressed_size::size(32), compressed_data::binary>> = data
+
+    z = :zlib.open()
+    :zlib.inflateInit(z)
+    decompressed_data = :zlib.inflate(z, compressed_data) |> IO.iodata_to_binary()
+
+    # Treat it like uncompressed data
+    frame = parse(id, tag, %{flags | compression: false}, decompressed_data)
+    # Re-introduce the compression flag
+    %{frame | flags: %{flags | compression: true}}
+  end
 
   def parse("APIC" = id, _tag, _flags, data) do
     <<encoding::size(8), rest::binary>> = data
@@ -560,7 +612,7 @@ defmodule Id3vx.Frame do
     %Frame{
       id: id,
       label: "#{id} is not implemented, please contribute, it's not hard.",
-      data: %Frame.Unknown{raw_data: data}
+      data: %Frame.Unknown{unused: :frame}
     }
   end
 

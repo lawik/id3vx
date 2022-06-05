@@ -257,6 +257,7 @@ defmodule Id3vx.EncodingTest do
         seller: "Underjord AB"
       }
     }
+
     binary = Frame.encode_frame(frame, %Tag{version: 3})
     assert <<frame_header::binary-size(10), frame_data::binary>> = binary
     assert <<"OWNE", frame_size::size(32), _flags::binary-size(2)>> = frame_header

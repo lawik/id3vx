@@ -43,4 +43,25 @@ defmodule Id3vx.FrameFlags do
       data_length_indicator: false
     }
   end
+
+  def as_binary(nil, tag) do
+    as_binary(all_false(), tag)
+  end
+
+  def as_binary(
+        %{
+          tag_alter_preservation: tap,
+          file_alter_preservation: fap,
+          read_only: ro,
+          compression: c,
+          encryption: e,
+          unsynchronisation: u
+        },
+        %{version: 3}
+      ) do
+    <<b(tap)::1, b(fap)::1, b(ro)::1, 0::5, b(c)::1, b(e)::1, b(u)::1, 0::5>>
+  end
+
+  def b(true), do: 1
+  def b(_), do: 0
 end
