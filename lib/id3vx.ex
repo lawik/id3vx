@@ -362,7 +362,7 @@ defmodule Id3vx do
         <<frame_data::binary-size(decoded_frame_size), rest::binary>> -> {frame_data, rest}
       end
 
-    flags = parse_frame_flags(flags)
+    flags = parse_frame_flags(flags, tag)
 
     frame = parse_frame(tag, id, decoded_frame_size, flags, frame_data)
     frames = [frame | frames]
@@ -400,7 +400,7 @@ defmodule Id3vx do
               <<frame_data::binary-size(frame_size), rest::binary>> -> {frame_data, rest}
             end
 
-          flags = parse_frame_flags(flags)
+          flags = parse_frame_flags(flags, tag)
 
           frame = parse_frame(tag, id, frame_size, flags, frame_data)
           frames = [frame | frames]
@@ -415,8 +415,8 @@ defmodule Id3vx do
     end
   end
 
-  defp parse_frame_flags(flags) do
-    <<0::1, tap::1, fap::1, ro::1, 0::5, gi::1, 0::2, c::1, e::1, u::1, dli::1>> = flags
+  defp parse_frame_flags(flags, %{version: 4}) do
+    <<0::1, tap::1, fap::1, ro::1, 0::4, gi::1, 0::2, c::1, e::1, u::1, dli::1>> = flags
 
     %FrameFlags{
       tag_alter_preservation: tap == 1,
@@ -427,6 +427,19 @@ defmodule Id3vx do
       encryption: e == 1,
       unsynchronisation: u == 1,
       data_length_indicator: dli == 1
+    }
+  end
+
+  defp parse_frame_flags(flags, %{version: 3}) do
+    <<tap::1, fap::1, ro::1, 0::5, c::1, e::1, u::1, 0::5>> = flags
+
+    %FrameFlags{
+      tag_alter_preservation: tap == 1,
+      file_alter_preservation: fap == 1,
+      read_only: ro == 1,
+      compression: c == 1,
+      encryption: e == 1,
+      unsynchronisation: u == 1
     }
   end
 

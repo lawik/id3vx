@@ -3,7 +3,6 @@ defmodule Id3vx.TagBuilderTest do
 
   alias Id3vx.Frame
   alias Id3vx.Tag
-  alias Id3vx.Frame.Chapter
   alias Id3vx.Frame.TableOfContents
 
   test "build basic tag v2.3 with some text frames" do
@@ -91,13 +90,11 @@ defmodule Id3vx.TagBuilderTest do
                    top_level: true
                  },
                  flags: %Id3vx.FrameFlags{
-                   compression: false,
-                   data_length_indicator: false,
-                   encryption: false,
-                   file_alter_preservation: false,
-                   grouping_identity: false,
-                   read_only: false,
                    tag_alter_preservation: false,
+                   file_alter_preservation: false,
+                   read_only: false,
+                   compression: false,
+                   encryption: false,
                    unsynchronisation: false
                  },
                  id: "CTOC"

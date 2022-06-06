@@ -198,12 +198,11 @@ defmodule Id3vx.Frame do
       encode_frame(%{frame | flags: %{frame.flags | compression: false}}, tag)
 
     uncompressed_size = byte_size(uncompressed_data)
-    IO.inspect(uncompressed_size, label: "uncompressed size")
 
     z = :zlib.open()
     :zlib.deflateInit(z)
 
-    compressed_data = :zlib.deflate(z, uncompressed_data) |> IO.iodata_to_binary()
+    compressed_data = :zlib.deflate(z, uncompressed_data, :full) |> IO.iodata_to_binary()
 
     :zlib.close(z)
 
@@ -399,9 +398,7 @@ defmodule Id3vx.Frame do
   end
 
   def encode_header(%Frame{id: id, flags: flags}, size, %{version: 3} = tag) do
-    # flags = <<0x00, 0x00>>
     flags = Id3vx.FrameFlags.as_binary(flags, tag)
-    IO.inspect(flags, base: :binary)
     size = Utils.pad_to_byte_size(size, 4)
     [id, size, flags]
   end
