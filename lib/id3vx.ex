@@ -431,7 +431,7 @@ defmodule Id3vx do
   end
 
   defp parse_frame_flags(flags, %{version: 3}) do
-    <<tap::1, fap::1, ro::1, 0::5, c::1, e::1, u::1, 0::5>> = flags
+    <<tap::1, fap::1, ro::1, 0::5, c::1, e::1, gi::1, 0::5>> = flags
 
     %FrameFlags{
       tag_alter_preservation: tap == 1,
@@ -439,13 +439,29 @@ defmodule Id3vx do
       read_only: ro == 1,
       compression: c == 1,
       encryption: e == 1,
-      unsynchronisation: u == 1
+      grouping_identity: gi == 1
     }
   end
 
   def parse_frame(%{version: 3} = tag, id, size, flags, data) do
+    {gi, data} =
+      if flags.grouping_identity do
+        <<gi::8, data::binary>> = data
+        {gi, data}
+      else
+        {nil, data}
+      end
+
     frame = Frame.parse(id, tag, flags, data)
-    %{frame | size: size, flags: flags, label: Labels.from_id(frame.id), raw_data: data}
+
+    %{
+      frame
+      | size: size,
+        flags: flags,
+        label: Labels.from_id(frame.id),
+        raw_data: data,
+        grouping_identity: gi
+    }
   end
 
   def parse_frame(%Tag{version: 4} = tag, id, size, flags, data) do

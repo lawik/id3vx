@@ -92,6 +92,7 @@ defmodule Id3vx.Frame do
             flags: nil,
             # "Payment", "Album sort order", "Title/songname/content description"
             label: nil,
+            grouping_identity: nil,
             data: nil,
             raw_data: nil
 
@@ -102,12 +103,13 @@ defmodule Id3vx.Frame do
           size: integer(),
           flags: %Id3vx.FrameFlags{},
           label: String.t(),
-          data: %{optional(any) => any}
+          grouping_identity: nil | integer(),
+          data: %{optional(any) => any},
+          raw_data: binary()
         }
 
   require Logger
 
-  alias Id3vx.Error
   alias Id3vx.Tag
   alias Id3vx.Utils
 
@@ -190,6 +192,18 @@ defmodule Id3vx.Frame do
   end
 
   def encode_frame(
+        %Frame{id: id, flags: %{encryption: true}, raw_data: raw} = frame,
+        %{version: 3} = tag
+      ) do
+    # Encode unmodified raw
+    Logger.info("Disregarding any edits to #{id} as it is encrypted. Re-using original data.")
+
+    frame_size = byte_size(raw)
+    header = encode_header(frame, frame_size, tag)
+    IO.iodata_to_binary([header, raw])
+  end
+
+  def encode_frame(
         %Frame{flags: %{compression: true}} = frame,
         %{version: 3} = tag
       ) do
@@ -212,6 +226,23 @@ defmodule Id3vx.Frame do
 
     header = encode_header(frame, compressed_size, tag)
     IO.iodata_to_binary([header, full_data])
+  end
+
+  def encode_frame(
+        %Frame{flags: %{grouping_identity: true}, grouping_identity: gi} = frame,
+        %{version: 3} = tag
+      ) do
+    # Encode as if no grouping identity
+    <<_header::binary-size(10), frame_data::binary>> =
+      encode_frame(%{frame | flags: %{frame.flags | grouping_identity: false}}, tag)
+
+    # Build in the grouping identity
+    grouped_data = <<gi::8>> <> frame_data
+    size = byte_size(grouped_data)
+
+    # Make a new header
+    header = encode_header(frame, size, tag)
+    IO.iodata_to_binary([header, grouped_data])
   end
 
   def encode_frame(%Frame{id: "CHAP"} = frame, %{version: 3} = tag) do

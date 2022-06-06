@@ -95,7 +95,7 @@ defmodule Id3vx.TagBuilderTest do
                    read_only: false,
                    compression: false,
                    encryption: false,
-                   unsynchronisation: false
+                   grouping_identity: false
                  },
                  id: "CTOC"
                },

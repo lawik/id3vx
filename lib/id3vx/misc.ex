@@ -55,11 +55,11 @@ defmodule Id3vx.FrameFlags do
           read_only: ro,
           compression: c,
           encryption: e,
-          unsynchronisation: u
+          grouping_identity: gi
         },
         %{version: 3}
       ) do
-    <<b(tap)::1, b(fap)::1, b(ro)::1, 0::5, b(c)::1, b(e)::1, b(u)::1, 0::5>>
+    <<b(tap)::1, b(fap)::1, b(ro)::1, 0::5, b(c)::1, b(e)::1, b(gi)::1, 0::5>>
   end
 
   def b(true), do: 1

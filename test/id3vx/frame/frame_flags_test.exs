@@ -54,4 +54,97 @@ defmodule Id3vx.Frame.FrameFlagsTest do
              ]
            } = tag2
   end
+
+  test "v2.3 use a frame with a grouping_identity" do
+    tag1 = %Tag{
+      version: 3,
+      revision: 0,
+      flags: %TagFlags{
+        unsynchronisation: false,
+        extended_header: false,
+        experimental: false
+      },
+      frames: [
+        %Frame{
+          id: "TIT2",
+          flags: %FrameFlags{grouping_identity: true},
+          data: %{
+            encoding: :utf16,
+            text: "Zero2"
+          },
+          grouping_identity: 0
+        },
+        %Frame{
+          id: "TIT3",
+          flags: %FrameFlags{grouping_identity: true},
+          data: %{
+            encoding: :utf16,
+            text: "Zero3"
+          },
+          grouping_identity: 0
+        },
+        %Frame{
+          id: "TIT2",
+          flags: %FrameFlags{grouping_identity: true},
+          data: %{
+            encoding: :utf16,
+            text: "One2"
+          },
+          grouping_identity: 1
+        },
+        %Frame{
+          id: "TIT3",
+          flags: %FrameFlags{grouping_identity: false},
+          data: %{
+            encoding: :utf16,
+            text: "None2"
+          }
+        }
+      ]
+    }
+
+    binary = Id3vx.encode_tag(tag1)
+
+    tag2 = Id3vx.parse_binary!(binary)
+
+    assert %Tag{
+             frames: [
+               %Frame{
+                 id: "TIT2",
+                 flags: %FrameFlags{grouping_identity: true},
+                 data: %{
+                   encoding: :utf16,
+                   text: "Zero2"
+                 },
+                 grouping_identity: 0
+               },
+               %Frame{
+                 id: "TIT3",
+                 flags: %FrameFlags{grouping_identity: true},
+                 data: %{
+                   encoding: :utf16,
+                   text: "Zero3"
+                 },
+                 grouping_identity: 0
+               },
+               %Frame{
+                 id: "TIT2",
+                 flags: %FrameFlags{grouping_identity: true},
+                 data: %{
+                   encoding: :utf16,
+                   text: "One2"
+                 },
+                 grouping_identity: 1
+               },
+               %Frame{
+                 id: "TIT3",
+                 flags: %FrameFlags{grouping_identity: false},
+                 data: %{
+                   encoding: :utf16,
+                   text: "None2"
+                 }
+               }
+             ]
+           } = tag2
+  end
 end
