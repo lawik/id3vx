@@ -127,8 +127,17 @@ defmodule Id3vx do
   def encode_tag(%Tag{version: 3} = tag) do
     frames = encode_frames(tag)
 
-    # TODO: Proper flag encoding
-    flags = <<0x00>>
+    {frames, desynched?} = unsynchronise_if_needed(frames)
+
+    tag_flags =
+      if is_nil(tag.flags) do
+        TagFlags.all_false()
+      else
+        tag.flags
+      end
+
+    tag = %{tag | flags: %{tag_flags | unsynchronisation: desynched?}}
+    flags = TagFlags.as_binary(tag.flags, tag)
     tag_size = frames |> byte_size() |> encode_synchsafe_integer()
 
     IO.iodata_to_binary([
@@ -193,8 +202,6 @@ defmodule Id3vx do
         throw(%Error{message: "Tag not found", context: :parse_prepend_tag})
     end
   end
-
-  # TODO: For ID3v2.3 we need to unsynchronize all the bytes before parsing further
 
   defp parse_step(source, :parse_extended_header, tag) do
     {data, source} = get_bytes(source, 6)
@@ -516,6 +523,21 @@ defmodule Id3vx do
     |> Enum.reverse()
     |> Enum.with_index()
     |> Enum.reduce(0, fn {el, index}, acc -> acc ||| el <<< (index * 7) end)
+  end
+
+  def unsynchronise_if_needed(data, desynched? \\ false, processed \\ []) do
+    case data do
+      <<>> ->
+        {IO.iodata_to_binary(processed), desynched?}
+
+      # False synchronisation
+      <<0xFF::8, 1::3, rem::5, rest::binary>> ->
+        unsynchronise_if_needed(rest, true, [processed, <<0xFF::8, 0::8, 1::3, rem::5>>])
+
+      <<checked::8, rest::binary>> ->
+        # Step one byte forward please
+        unsynchronise_if_needed(rest, desynched?, [processed, checked])
+    end
   end
 
   def decode_unsynchronized(data, decoded \\ <<>>)
