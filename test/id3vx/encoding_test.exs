@@ -441,4 +441,21 @@ defmodule Id3vx.EncodingTest do
     assert method_symbol == frame.data.method_symbol
     assert encryption_data == frame.data.encryption_data
   end
+
+  test "v2.3 PCNT encoding" do
+    frame = %Frame{
+      id: "PCNT",
+      flags: %FrameFlags{},
+      data: %Frame.PlayCounter{
+        counter: 2
+      }
+    }
+
+    binary = Frame.encode_frame(frame, %Tag{version: 3})
+    assert <<frame_header::binary-size(10), frame_data::binary>> = binary
+    assert <<"PCNT", frame_size::size(32), _flags::binary-size(2)>> = frame_header
+    assert 4 == frame_size
+    counter = :binary.decode_unsigned(frame_data)
+    assert counter == frame.data.counter
+  end
 end
