@@ -113,7 +113,7 @@ defmodule Id3vx.Frame do
         }
 
   require Logger
-
+  alias Id3vx.Error
   alias Id3vx.Tag
   alias Id3vx.Utils
 
@@ -601,6 +601,28 @@ defmodule Id3vx.Frame do
     binary = <<counter::size(counter_size)>>
 
     frame_binary = [binary]
+    frame_size = IO.iodata_length(frame_binary)
+    header = encode_header(frame, frame_size, tag)
+    IO.iodata_to_binary([header, frame_binary])
+  end
+
+  def encode_frame(%Frame{id: "USER"} = frame, %{version: 3} = tag) do
+    %Frame.TermsOfUse{
+      encoding: encoding,
+      language: language,
+      text: text
+    } = frame.data
+
+    if byte_size(language) != 3 do
+      throw(%Error{
+        message: "The language must be a 3 byte ISO-639-2 code.",
+        context: {:frame, frame}
+      })
+    end
+
+    encoding_byte = get_encoding_byte(encoding)
+    text = decode_string(encoding, text)
+    frame_binary = [<<encoding_byte>>, language, text]
 
     frame_size = IO.iodata_length(frame_binary)
     header = encode_header(frame, frame_size, tag)
@@ -1004,6 +1026,22 @@ defmodule Id3vx.Frame do
       id: id,
       data: %Frame.MusicCDIdentifier{
         cd_toc_binary: cd_toc_binary
+      }
+    }
+  end
+
+  def parse("USER" = id, _tag, _flags, data) do
+    <<encoding::size(8), rest::binary>> = data
+    encoding = @text_encoding[encoding]
+    <<language::binary-size(3), text::binary>> = rest
+    text = decode_string(encoding, text)
+
+    %Frame{
+      id: id,
+      data: %{
+        encoding: encoding,
+        language: language,
+        text: text
       }
     }
   end
