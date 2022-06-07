@@ -293,10 +293,10 @@ defmodule Id3vx.EncodingTest do
     assert <<0x01::size(8), frame_rest::binary>> = frame_data
     assert <<"english", frame_rest::binary>> = frame_rest
 
-    [content_description, content_text] = :binary.split(frame_rest, <<0>>)
+    [content_description, content_text] = :binary.split(frame_rest, <<0, 0>>)
 
     assert content_description == frame.data.content_description
-    assert content_text = frame.data.content_text
+    assert content_text == frame.data.content_text
   end
 
   test "v2.3 encoding url frames" do
@@ -346,7 +346,7 @@ defmodule Id3vx.EncodingTest do
     assert 47 == frame_size
     assert <<0x01::size(8), frame_rest::binary>> = frame_data
     [description, url] = :binary.split(frame_rest, <<0, 0>>)
-    assert description = frame.data.description
+    assert description == frame.data.description
     assert url == frame.data.url
   end
 end
