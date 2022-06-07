@@ -425,12 +425,6 @@ defmodule Id3vx.Frame do
     IO.iodata_to_binary([header, frame_binary])
   end
 
-  def encode_frame(%Frame{data: %Frame.Unknown{}} = frame, %{version: 3} = tag) do
-    frame_size = byte_size(frame.raw_data)
-    header = encode_header(frame, frame_size, tag)
-    IO.iodata_to_binary([header, frame.raw_data])
-  end
-
   def encode_frame(%Frame{id: "COMM"} = frame, %{version: 3} = tag) do
     %Frame.Comment{
       encoding: encoding,
@@ -529,6 +523,25 @@ defmodule Id3vx.Frame do
     } = frame.data
 
     frame_binary = [owner_identifier, <<0, 0>>, <<method_symbol::8>>, encryption_data]
+    frame_size = IO.iodata_length(frame_binary)
+    header = encode_header(frame, frame_size, tag)
+    IO.iodata_to_binary([header, frame_binary])
+  end
+
+  def encode_frame(%Frame{id: "PCNT"} = frame, %{version: 3} = tag) do
+    %{
+      counter: counter
+    } = frame.data
+
+    # byte size of counter
+    counter_binary_size = counter |> :binary.encode_unsigned() |> byte_size()
+
+    # use minimum 32 bits
+    counter_size = max(counter_binary_size * 8, 32)
+
+    binary = <<counter::size(counter_size)>>
+
+    frame_binary = [binary]
 
     frame_size = IO.iodata_length(frame_binary)
     header = encode_header(frame, frame_size, tag)
@@ -803,6 +816,17 @@ defmodule Id3vx.Frame do
         owner_identifier: owner_identifier,
         method_symbol: method_symbol,
         encryption_data: encryption_data
+      }
+    }
+  end
+
+  def parse("PCNT" = id, _tag, _flags, data) do
+    counter = :binary.decode_unsigned(data)
+
+    %Frame{
+      id: id,
+      data: %Frame.PlayCounter{
+        counter: counter
       }
     }
   end
