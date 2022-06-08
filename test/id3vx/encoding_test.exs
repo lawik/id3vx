@@ -343,13 +343,13 @@ defmodule Id3vx.EncodingTest do
     assert <<"20220602", "Underjord AB">> = rest
   end
 
-  test "v2.3 encoding COMM frame" do
+  test "v2.3 encoding COMM frame", c do
     frame = %Frame{
       id: "COMM",
       flags: %FrameFlags{},
       data: %Frame.Comment{
         encoding: :utf16,
-        language: "english",
+        language: "eng",
         content_description: "aa",
         content_text: "bb"
       }
@@ -359,15 +359,23 @@ defmodule Id3vx.EncodingTest do
     assert <<frame_header::binary-size(10), frame_data::binary>> = binary
 
     assert <<"COMM", frame_size::size(32), _flags::binary-size(2)>> = frame_header
-    assert 22 == frame_size
+    assert 18 == frame_size
 
     assert <<0x01::size(8), frame_rest::binary>> = frame_data
-    assert <<"english", frame_rest::binary>> = frame_rest
+    assert <<"eng", frame_rest::binary>> = frame_rest
 
     [content_description, content_text] = :binary.split(frame_rest, <<0, 0>>)
 
     assert content_description == <<0xFE, 0xFF>> <> "\0a\0a"
     assert content_text == <<0xFE, 0xFF>> <> "\0b\0b"
+
+    tag = Id3vx.Tag.create(3)
+    tag = %{tag | frames: [frame]}
+    path = scratch(c, tag)
+    assert {:ok, _t} = Id3vx.parse_file(path)
+
+    assert id3v2(path) =~ "COMM"
+    assert ffmpeg(path) =~ "aa"
   end
 
   test "v2.3 encoding url frames" do
