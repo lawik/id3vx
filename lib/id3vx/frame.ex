@@ -87,6 +87,7 @@ defmodule Id3vx.Frame do
     WPUB Publishers official webpage
     WXXX User defined URL link frame
   """
+  alias Id3vx.Error
 
   defstruct id: nil,
             size: nil,
@@ -470,6 +471,13 @@ defmodule Id3vx.Frame do
       content_description: content_description,
       content_text: content_text
     } = frame.data
+
+    if byte_size(language) != 3 do
+      throw(%Error{
+        message: "The language must be a 3 byte ISO-639-2 code.",
+        context: {:frame, frame}
+      })
+    end
 
     encoding_byte = get_encoding_byte(encoding)
     null_byte = get_null_byte(encoding)
