@@ -521,7 +521,7 @@ defmodule Id3vx.EncodingTest do
     assert encryption_data == frame.data.encryption_data
   end
 
-  test "v2.3 PCNT encoding" do
+  test "v2.3 PCNT encoding", c do
     frame = %Frame{
       id: "PCNT",
       flags: %FrameFlags{},
@@ -536,6 +536,13 @@ defmodule Id3vx.EncodingTest do
     assert 4 == frame_size
     counter = :binary.decode_unsigned(frame_data)
     assert counter == frame.data.counter
+
+    tag = Id3vx.Tag.create(3)
+    tag = %{tag | frames: [frame]}
+    path = scratch(c, tag)
+
+    assert {:ok, _t} = Id3vx.parse_file(path)
+    assert id3v2(path) =~ "PCNT"
   end
 
   test "v2.3 encoding MCDI frame" do
@@ -696,9 +703,42 @@ defmodule Id3vx.EncodingTest do
     tag = Id3vx.Tag.create(3)
     tag = %{tag | frames: [frame]}
     path = scratch(c, tag)
+
     assert {:ok, _t} = Id3vx.parse_file(path)
 
     assert id3v2(path) =~ "USLT"
     assert ffmpeg(path) =~ "a lyrics about foobarbaz"
+  end
+
+  test "v2.3 encoding POPM frame", c do
+    frame = %Frame{
+      id: "POPM",
+      flags: %FrameFlags{},
+      data: %Frame.Popularimeter{
+        email: "foobar@example.com",
+        rating: 34,
+        counter: 2
+      }
+    }
+
+    binary = Frame.encode_frame(frame, %Tag{version: 3})
+    assert <<frame_header::binary-size(10), frame_data::binary>> = binary
+    assert <<"POPM", frame_size::size(32), _flags::binary-size(2)>> = frame_header
+    assert 24 == frame_size
+
+    [email, rest] = :binary.split(frame_data, <<0>>)
+
+    assert email == frame.data.email
+
+    <<rating::size(8), counter::size(32)>> = rest
+    assert rating == frame.data.rating
+    assert counter == frame.data.counter
+
+    tag = Id3vx.Tag.create(3)
+    tag = %{tag | frames: [frame]}
+    path = scratch(c, tag)
+
+    assert {:ok, _t} = Id3vx.parse_file(path)
+    assert id3v2(path) =~ "POPM"
   end
 end

@@ -734,6 +734,26 @@ defmodule Id3vx.Frame do
     IO.iodata_to_binary([header, frame_binary])
   end
 
+  def encode_frame(%Frame{id: "POPM"} = frame, %{version: 3} = tag) do
+    %Frame.Popularimeter{
+      email: email,
+      rating: rating,
+      counter: counter
+    } = frame.data
+
+    # byte size of counter
+    counter_binary_size = counter |> :binary.encode_unsigned() |> byte_size()
+
+    # use minimum 32 bits
+    counter_size = max(counter_binary_size * 8, 32)
+
+    frame_binary = [email, <<0>>, <<rating::size(8)>>, <<counter::size(counter_size)>>]
+
+    frame_size = IO.iodata_length(frame_binary)
+    header = encode_header(frame, frame_size, tag)
+    IO.iodata_to_binary([header, frame_binary])
+  end
+
   def encode_frame(%Frame{raw_data: raw} = frame, tag) do
     if frame.flags.tag_alter_preservation do
       # According to spec, discard unknown frame if flag is set for it and tag is modified
@@ -1123,9 +1143,24 @@ defmodule Id3vx.Frame do
     }
   end
 
-  def parse(id, _tag, _flags, _data) do
-    Logger.warn("Unimplemented frame parsed: #{id}")
+  def parse("POPM" = id, _tag, _flags, data) do
+    [email, rest] = :binary.split(data, <<0>>)
 
+    <<rating::size(8), rest::binary>> = rest
+
+    counter = :binary.decode_unsigned(rest)
+
+    %Frame{
+      id: id,
+      data: %Frame.Popularimeter{
+        email: email,
+        rating: rating,
+        counter: counter
+      }
+    }
+  end
+
+  def parse(id, _tag, _flags, data) do
     %Frame{
       id: id,
       label: "#{id} is not implemented, please contribute, it's not hard.",
