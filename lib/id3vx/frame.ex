@@ -205,6 +205,40 @@ defmodule Id3vx.Frame do
           | :non_musical_merchandise
   def recieved_as_types, do: @recieved_as_type
 
+  @content_type %{
+    0x0 => :other,
+    0x1 => :lyrics,
+    0x2 => :text_transcription,
+    0x3 => :movement,
+    0x4 => :events,
+    0x5 => :chord,
+    0x6 => :trivia,
+    0x7 => :webpages_url,
+    0x8 => :images_url
+  }
+
+  @type content_type ::
+          :other
+          | :lyrics
+          | :text_transcription
+          | :movement
+          | :events
+          | :chord
+          | :trivia
+          | :webpages_url
+          | :images_url
+
+  def content_types, do: @content_type
+
+  @timestamp_format %{
+    0x01 => :mpeg,
+    0x02 => :ms
+  }
+
+  @type timestamp_format :: :mpeg | :milliseconds
+
+  def timestamp_formats, do: @timestamp_format
+
   @spec encode_frame(Frame.t(), Id3vx.Tag.t()) :: binary()
   def encode_frame(frame, tag)
 
@@ -652,6 +686,45 @@ defmodule Id3vx.Frame do
     IO.iodata_to_binary([header, frame_binary])
   end
 
+  def encode_frame(%Frame{id: "SYLT"} = frame, %{version: 3} = tag) do
+    %Frame.SynchronisedLyricsText{
+      encoding: encoding,
+      language: language,
+      format: format,
+      content_type: content_type,
+      content_descriptor: content_descriptor
+    } = frame.data
+
+    encoding_byte =
+      @text_encoding
+      |> Utils.flip_map()
+      |> Map.get(encoding)
+
+    timestamp_format_byte =
+      @timestamp_format
+      |> Utils.flip_map()
+      |> Map.get(format)
+
+    content_type_byte =
+      @content_type
+      |> Utils.flip_map()
+      |> Map.get(content_type)
+
+    content_descriptor = convert_string(encoding, content_descriptor)
+
+    frame_binary = [
+      <<encoding_byte>>,
+      language,
+      timestamp_format_byte,
+      content_type_byte,
+      content_descriptor
+    ]
+
+    frame_size = IO.iodata_length(frame_binary)
+    header = encode_header(frame, frame_size, tag)
+    IO.iodata_to_binary([header, frame_binary])
+  end
+
   def encode_frame(%Frame{raw_data: raw} = frame, tag) do
     if frame.flags.tag_alter_preservation do
       # According to spec, discard unknown frame if flag is set for it and tag is modified
@@ -996,6 +1069,28 @@ defmodule Id3vx.Frame do
         description: description,
         picture_mime: picture_mime,
         logo: logo
+      }
+    }
+  end
+
+  def parse("SYLT" = id, _tag, _flags, data) do
+    <<encoding::size(8), language::binary-size(3), rest::binary>> = data
+
+    <<format::size(8), content_type::size(8), rest::binary>> = rest
+    format = @timestamp_format[format]
+    content_type = @content_type[content_type]
+    encoding = @text_encoding[encoding]
+    {content_descriptor, _rest} = split_at_null(encoding, rest)
+    content_descriptor = convert_string(encoding, content_descriptor)
+
+    %Frame{
+      id: id,
+      data: %Frame.SynchronisedLyricsText{
+        encoding: encoding,
+        language: language,
+        format: format,
+        content_type: content_type,
+        content_descriptor: content_descriptor
       }
     }
   end

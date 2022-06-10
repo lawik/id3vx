@@ -344,7 +344,7 @@ defmodule Id3vx.EncodingTest do
     assert <<frame_header::binary-size(10), frame_data::binary>> = binary
     assert <<"WXXX", frame_size::size(32), _flags::binary-size(2)>> = frame_header
     assert 47 == frame_size
-    assert <<0x01::size(8), frame_rest::binary>> = frame_data
+    <<0x01::size(8), frame_rest::binary>> = frame_data
     [description, url] = :binary.split(frame_rest, <<0, 0>>)
     assert description == frame.data.description
     assert url == frame.data.url
@@ -518,6 +518,7 @@ defmodule Id3vx.EncodingTest do
 
     binary = Frame.encode_frame(frame, %Tag{version: 3})
     assert <<frame_header::binary-size(10), frame_data::binary>> = binary
+
     assert <<"COMR", frame_size::size(32), _flags::binary-size(2)>> = frame_header
     assert 97 == frame_size
 
@@ -532,5 +533,33 @@ defmodule Id3vx.EncodingTest do
 
     [contact_url, _rest] = :binary.split(frame_rest, <<0>>)
     assert contact_url == frame.data.contact_url
+  end
+
+  test "v2.3 encoding SYLT frame" do
+    frame = %Frame{
+      id: "SYLT",
+      flags: %FrameFlags{},
+      data: %Frame.SynchronisedLyricsText{
+        encoding: :utf16,
+        language: "eng",
+        format: :ms,
+        content_type: :lyrics,
+        content_descriptor: "foo bar baz"
+      }
+    }
+
+    binary = Frame.encode_frame(frame, %Tag{version: 3})
+    assert <<frame_header::binary-size(10), frame_data::binary>> = binary
+
+    assert <<"SYLT", frame_size::size(32), _flags::binary-size(2)>> = frame_header
+    assert 17 == frame_size
+    <<0x01::size(8), frame_rest::binary>> = frame_data
+
+    <<language::binary-size(3), frame_rest::binary>> = frame_rest
+    assert language == frame.data.language
+
+    assert <<0x02, 0x01, frame_rest::binary>> = frame_rest
+
+    assert frame_rest = frame.data.content_descriptor
   end
 end
