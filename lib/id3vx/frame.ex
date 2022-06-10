@@ -485,6 +485,19 @@ defmodule Id3vx.Frame do
 
     embedded_info = boolean_byte(embedded_info)
     frame_binary = [<<buffer_size::24>>, <<embedded_info::8>>, <<offset::32>>]
+
+    frame_size = IO.iodata_length(frame_binary)
+    header = encode_header(frame, frame_size, tag)
+    IO.iodata_to_binary([header, frame_binary])
+  end
+
+  def encode_frame(%Frame{id: "MCDI"} = frame, %{version: 3} = tag) do
+    %Frame.MusicCDIdentifier{
+      cd_toc_binary: cd_toc_binary
+    } = frame.data
+
+    frame_binary = [cd_toc_binary]
+
     frame_size = IO.iodata_length(frame_binary)
     header = encode_header(frame, frame_size, tag)
     IO.iodata_to_binary([header, frame_binary])
@@ -792,6 +805,17 @@ defmodule Id3vx.Frame do
     }
   end
 
+  def parse("MCDI" = id, tag, _flags, data) do
+    cd_toc_binary = data
+
+    %Frame{
+      id: id,
+      data: %Frame.MusicCDIdentifier{
+        cd_toc_binary: cd_toc_binary
+      }
+    }
+  end
+
   def parse("GRID" = id, _tag, _flags, data) do
     [owner_identifier, rest] = :binary.split(data, <<0>>)
     <<symbol::binary-size(8), group_dependent_data::binary>> = rest
@@ -831,7 +855,7 @@ defmodule Id3vx.Frame do
     }
   end
 
-  def parse(id, _tag, _flags, _data) do
+  def parse(id, _tag, _flags, data) do
     %Frame{
       id: id,
       label: "#{id} is not implemented, please contribute, it's not hard.",
