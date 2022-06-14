@@ -349,4 +349,41 @@ defmodule Id3vx.EncodingTest do
     assert description == frame.data.description
     assert url == frame.data.url
   end
+
+  test "v2.4 encoding SYTC frame" do
+    frame = %Frame{
+      id: "SYTC",
+      flags: %FrameFlags{},
+      data: %Frame.SynchronisedTempoCodes{
+        timestamp_format: :ms,
+        tempo_data: "random internet data"
+      }
+    }
+
+    binary = Frame.encode_frame(frame, %Tag{version: 3})
+    assert <<frame_header::binary-size(10), frame_data::binary>> = binary
+    assert <<"SYTC", frame_size::size(32), _flags::binary-size(2)>> = frame_header
+    assert 21 == frame_size
+    <<0x02::size(8), frame_rest::binary>> = frame_data
+
+    assert frame_rest == frame.data.tempo_data
+  end
+
+  test "v2.4 encoding POSS frame" do
+    frame = %Frame{
+      id: "POSS",
+      flags: %FrameFlags{},
+      data: %Frame.PositionSynchronisation{
+        timestamp_format: :ms,
+        postition: "0011"
+      }
+    }
+
+    binary = Frame.encode_frame(frame, %Tag{version: 3})
+    assert <<frame_header::binary-size(10), frame_data::binary>> = binary
+    assert <<"POSS", frame_size::size(32), _flags::binary-size(2)>> = frame_header
+    assert 5 == frame_size
+    <<0x02::size(8), frame_rest::binary>> = frame_data
+    assert frame_rest == frame.data.postition
+  end
 end

@@ -125,6 +125,15 @@ defmodule Id3vx.Frame do
 
   def text_encodings, do: @text_encoding
 
+  @timestamp_format %{
+    0x01 => :mpeg,
+    0x02 => :ms
+  }
+
+  @type timestamp_format :: :mpeg | :ms
+
+  def timestamp_formats, do: @timestamp_format
+
   @picture_type %{
     0x00 => :other,
     0x01 => :basic_file_icon,
@@ -474,6 +483,32 @@ defmodule Id3vx.Frame do
     IO.iodata_to_binary([header, frame_binary])
   end
 
+  def encode_frame(%Frame{id: "SYTC"} = frame, %{version: 3} = tag) do
+    %Frame.SynchronisedTempoCodes{
+      timestamp_format: timestamp_format,
+      tempo_data: tempo_data
+    } = frame.data
+
+    timestamp_format_binary = get_timestamp_format_byte(timestamp_format)
+    frame_binary = [timestamp_format_binary, tempo_data]
+    frame_size = IO.iodata_length(frame_binary)
+    header = encode_header(frame, frame_size, tag)
+    IO.iodata_to_binary([header, frame_binary])
+  end
+
+  def encode_frame(%Frame{id: "POSS"} = frame, %{version: 3} = tag) do
+    %Frame.PositionSynchronisation{
+      timestamp_format: timestamp_format,
+      postition: position
+    } = frame.data
+
+    timestamp_format_binary = get_timestamp_format_byte(timestamp_format)
+    frame_binary = [timestamp_format_binary, position]
+    frame_size = IO.iodata_length(frame_binary)
+    header = encode_header(frame, frame_size, tag)
+    IO.iodata_to_binary([header, frame_binary])
+  end
+
   def encode_frame(%Frame{raw_data: raw} = frame, tag) do
     if frame.flags.tag_alter_preservation do
       # According to spec, discard unknown frame if flag is set for it and tag is modified
@@ -693,6 +728,38 @@ defmodule Id3vx.Frame do
     }
   end
 
+  def parse("SYTC" = id, _tag, _flags, data) do
+    <<format::size(8), rest::binary>> = data
+
+    timestamp_format = @timestamp_format[format]
+
+    tempo_data = rest
+
+    %Frame{
+      id: id,
+      data: %Frame.SynchronisedTempoCodes{
+        timestamp_format: timestamp_format,
+        tempo_data: tempo_data
+      }
+    }
+  end
+
+  def parse("POSS" = id, _tag, _flags, data) do
+    <<format::size(8), rest::binary>> = data
+
+    timestamp_format = @timestamp_format[format]
+
+    position = rest
+
+    %Frame{
+      id: id,
+      data: %Frame.PositionSynchronisation{
+        timestamp_format: timestamp_format,
+        position: position
+      }
+    }
+  end
+
   def parse(id, _tag, _flags, data) do
     %Frame{
       id: id,
@@ -831,5 +898,11 @@ defmodule Id3vx.Frame do
     @text_encoding
     |> Utils.flip_map()
     |> Map.get(encoding)
+  end
+
+  def get_timestamp_format_byte(timestamp_format) do
+    @timestamp_format
+    |> Utils.flip_map()
+    |> Map.get(timestamp_format)
   end
 end
