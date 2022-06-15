@@ -496,6 +496,45 @@ defmodule Id3vx.Frame do
     IO.iodata_to_binary([header, frame_binary])
   end
 
+  def encode_frame(%Frame{id: "PRIV"} = frame, %{version: 3} = tag) do
+    %Frame.Private{
+      owner_identifier: owner_identifier,
+      private_data: private_data
+    } = frame.data
+
+    frame_binary = [owner_identifier, <<0>>, private_data]
+    frame_size = IO.iodata_length(frame_binary)
+    header = encode_header(frame, frame_size, tag)
+    IO.iodata_to_binary([header, frame_binary])
+  end
+
+  def encode_frame(%Frame{id: "GRID"} = frame, %{version: 3} = tag) do
+    %Frame.GroupIdentificationRegistration{
+      owner_identifier: owner_identifier,
+      symbol: symbol,
+      group_dependent_data: group_dependent_data
+    } = frame.data
+
+    frame_binary = [owner_identifier, <<0>>, <<symbol::8>>, group_dependent_data]
+    frame_size = IO.iodata_length(frame_binary)
+    header = encode_header(frame, frame_size, tag)
+    IO.iodata_to_binary([header, frame_binary])
+  end
+
+  def encode_frame(%Frame{id: "ENCR"} = frame, %{version: 3} = tag) do
+    %Frame.EncryptionMethodRegistration{
+      owner_identifier: owner_identifier,
+      method_symbol: method_symbol,
+      encryption_data: encryption_data
+    } = frame.data
+
+    frame_binary = [owner_identifier, <<0, 0>>, <<method_symbol::8>>, encryption_data]
+
+    frame_size = IO.iodata_length(frame_binary)
+    header = encode_header(frame, frame_size, tag)
+    IO.iodata_to_binary([header, frame_binary])
+  end
+
   def encode_frame(%Frame{raw_data: raw} = frame, tag) do
     if frame.flags.tag_alter_preservation do
       # According to spec, discard unknown frame if flag is set for it and tag is modified
@@ -728,7 +767,47 @@ defmodule Id3vx.Frame do
     }
   end
 
-  def parse(id, _tag, _flags, _data) do
+  def parse("PRIV" = id, _tag, _flags, data) do
+    [owner_identifier, private_data] = :binary.split(data, <<0>>)
+
+    %Frame{
+      id: id,
+      data: %Frame.Private{
+        owner_identifier: owner_identifier,
+        private_data: private_data
+      }
+    }
+  end
+
+  def parse("GRID" = id, _tag, _flags, data) do
+    [owner_identifier, rest] = :binary.split(data, <<0>>)
+    <<symbol::binary-size(8), group_dependent_data::binary>> = rest
+
+    %Frame{
+      id: id,
+      data: %Frame.GroupIdentificationRegistration{
+        owner_identifier: owner_identifier,
+        symbol: symbol,
+        group_dependent_data: group_dependent_data
+      }
+    }
+  end
+
+  def parse("ENCR" = id, _tag, _flags, data) do
+    [owner_identifier, rest] = :binary.split(data, <<0, 0>>)
+    <<method_symbol::size(8), encryption_data::binary>> = rest
+
+    %Frame{
+      id: id,
+      data: %Frame.EncryptionMethodRegistration{
+        owner_identifier: owner_identifier,
+        method_symbol: method_symbol,
+        encryption_data: encryption_data
+      }
+    }
+  end
+
+  def parse(id, _tag, _flags, data) do
     %Frame{
       id: id,
       label: "#{id} is not implemented, please contribute, it's not hard.",
