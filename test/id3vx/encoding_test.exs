@@ -363,6 +363,7 @@ defmodule Id3vx.EncodingTest do
 
     binary = Frame.encode_frame(frame, %Tag{version: 3})
     assert <<frame_header::binary-size(10), frame_data::binary>> = binary
+
     assert <<"RBUF", frame_size::size(32), _flags::binary-size(2)>> = frame_header
     assert 8 == frame_size
 
@@ -370,5 +371,74 @@ defmodule Id3vx.EncodingTest do
 
     assert buffer_size == frame.data.buffer_size
     assert offset == frame.data.offset
+  end
+
+  test "v2.3 encoding PRIV frame" do
+    frame = %Frame{
+      id: "PRIV",
+      flags: %FrameFlags{},
+      data: %Frame.Private{
+        owner_identifier: "FOOBARBAZ",
+        private_data: "foobarbaz"
+      }
+    }
+
+    binary = Frame.encode_frame(frame, %Tag{version: 3})
+    assert <<frame_header::binary-size(10), frame_data::binary>> = binary
+    assert <<"PRIV", frame_size::size(32), _flags::binary-size(2)>> = frame_header
+    assert 19 == frame_size
+
+    [owner_identifier, private_data] = :binary.split(frame_data, <<0>>)
+
+    assert owner_identifier == frame.data.owner_identifier
+    assert private_data == frame.data.private_data
+  end
+
+  test "v2.3 encoding GRID frame" do
+    frame = %Frame{
+      id: "GRID",
+      flags: %FrameFlags{},
+      data: %Frame.GroupIdentificationRegistration{
+        owner_identifier: "FOOBARBAZ",
+        symbol: 80,
+        group_dependent_data: "foobarbaz"
+      }
+    }
+
+    binary = Frame.encode_frame(frame, %Tag{version: 3})
+    assert <<frame_header::binary-size(10), frame_data::binary>> = binary
+    assert <<"GRID", frame_size::size(32), _flags::binary-size(2)>> = frame_header
+    assert 20 == frame_size
+    [owner_identifier, rest] = :binary.split(frame_data, <<0>>)
+    assert owner_identifier == frame.data.owner_identifier
+
+    <<symbol::size(8), group_dependent_data::binary>> = rest
+
+    assert symbol == frame.data.symbol
+    assert group_dependent_data == frame.data.group_dependent_data
+  end
+
+  test "v2.3 encoding ENCR frame" do
+    frame = %Frame{
+      id: "ENCR",
+      flags: %FrameFlags{},
+      data: %Frame.EncryptionMethodRegistration{
+        owner_identifier: "FOOBARBAZ",
+        method_symbol: 80,
+        encryption_data: "foobarbaz"
+      }
+    }
+
+    binary = Frame.encode_frame(frame, %Tag{version: 3})
+    assert <<frame_header::binary-size(10), frame_data::binary>> = binary
+    assert <<"ENCR", frame_size::size(32), _flags::binary-size(2)>> = frame_header
+    assert 21 == frame_size
+    [owner_identifier, rest] = :binary.split(frame_data, <<0, 0>>)
+    assert owner_identifier == frame.data.owner_identifier
+
+    <<method_symbol::size(8), encryption_data::binary>> = rest
+
+    assert method_symbol == frame.data.method_symbol
+    assert encryption_data == frame.data.encryption_data
   end
 end
