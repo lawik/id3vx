@@ -561,6 +561,27 @@ defmodule Id3vx.Frame do
     IO.iodata_to_binary([header, frame_binary])
   end
 
+  def encode_frame(%Frame{id: "AENC"} = frame, %{version: 3} = tag) do
+    %Frame.AudioEncryption{
+      owner_identifier: owner_identifier,
+      preview_start: preview_start,
+      preview_length: preview_length,
+      encryption_info: encryption_info
+    } = frame.data
+
+    frame_binary = [
+      owner_identifier,
+      <<0>>,
+      <<preview_start::16>>,
+      <<preview_length::16>>,
+      encryption_info
+    ]
+
+    frame_size = IO.iodata_length(frame_binary)
+    header = encode_header(frame, frame_size, tag)
+    IO.iodata_to_binary([header, frame_binary])
+  end
+
   def encode_frame(%Frame{raw_data: raw} = frame, tag) do
     if frame.flags.tag_alter_preservation do
       # According to spec, discard unknown frame if flag is set for it and tag is modified
@@ -851,6 +872,22 @@ defmodule Id3vx.Frame do
       id: id,
       data: %Frame.PlayCounter{
         counter: counter
+      }
+    }
+  end
+
+  def parse("AENC" = id, _tag, _flags, data) do
+    [owner_identifier, rest] = :binary.split(data, <<0>>)
+
+    <<preview_start::size(16), preview_length::size(16), encryption_info::binary>> = rest
+
+    %Frame{
+      id: id,
+      data: %Frame.AudioEncryption{
+        owner_identifier: owner_identifier,
+        preview_start: preview_start,
+        preview_length: preview_length,
+        encryption_info: encryption_info
       }
     }
   end

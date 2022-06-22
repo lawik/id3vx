@@ -474,4 +474,29 @@ defmodule Id3vx.EncodingTest do
     assert <<"MCDI", frame_size::size(32), _flags::binary-size(2)>> = frame_header
     assert 11 == frame_size
   end
+
+  test "v2.3 encoding AENC frame" do
+    frame = %Frame{
+      id: "AENC",
+      flags: %FrameFlags{},
+      data: %Frame.AudioEncryption{
+        owner_identifier: "Owner Foo",
+        preview_start: 02,
+        preview_length: 10,
+        encryption_info: "data info encrypter"
+      }
+    }
+
+    binary = Frame.encode_frame(frame, %Tag{version: 3})
+    assert <<frame_header::binary-size(10), frame_data::binary>> = binary
+    assert <<"AENC", frame_size::size(32), _flags::binary-size(2)>> = frame_header
+    assert 33 == frame_size
+
+    [owner_identifier, rest] = :binary.split(frame_data, <<0>>)
+    assert frame.data.owner_identifier == owner_identifier
+
+    <<0x02::size(16), 0xA::size(16), encryption_info::binary>> = rest
+
+    assert encryption_info == frame.data.encryption_info
+  end
 end
