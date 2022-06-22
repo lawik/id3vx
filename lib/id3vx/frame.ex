@@ -182,6 +182,29 @@ defmodule Id3vx.Frame do
 
   def picture_types, do: @picture_type
 
+  @recieved_as_type %{
+    0x00 => :other,
+    0x01 => :standard_cd_album_with_other_songs,
+    0x02 => :compressed_audio_on_cd,
+    0x03 => :file_over_the_internet,
+    0x04 => :stream_over_the_internet,
+    0x05 => :as_note_sheets,
+    0x06 => :as_note_sheets_in_a_book_with_other_sheets,
+    0x07 => :music_on_other_media,
+    0x08 => :non_musical_merchandise
+  }
+  @type recieved_as_type ::
+          :other
+          | :standard_cd_album_with_other_songs
+          | :compressed_audio_on_cd
+          | :file_over_the_internet
+          | :stream_over_the_internet
+          | :as_note_sheets
+          | :as_note_sheets_in_a_book_with_other_sheets
+          | :music_on_other_media
+          | :non_musical_merchandise
+  def recieved_as_types, do: @recieved_as_type
+
   @spec encode_frame(Frame.t(), Id3vx.Tag.t()) :: binary()
   def encode_frame(frame, tag)
 
@@ -582,6 +605,53 @@ defmodule Id3vx.Frame do
     IO.iodata_to_binary([header, frame_binary])
   end
 
+  def encode_frame(%Frame{id: "COMR"} = frame, %{version: 3} = tag) do
+    %{
+      encoding: encoding,
+      price: price,
+      valid_until: valid_until,
+      contact_url: contact_url,
+      recieved_as: recieved_as,
+      seller_name: seller_name,
+      description: description,
+      picture_mime: picture_mime,
+      logo: logo
+    } = frame.data
+
+    null_byte = get_null_byte(encoding)
+    encoding_byte = get_encoding_byte(encoding)
+    contact_url = convert_string(:iso8859_1, contact_url)
+
+    recieved_as =
+      @recieved_as_type
+      |> Utils.flip_map()
+      |> Map.get(recieved_as)
+
+    seller_name = convert_string(encoding, seller_name)
+    description = convert_string(encoding, description)
+
+    frame_binary = [
+      <<encoding_byte>>,
+      price,
+      <<0>>,
+      <<valid_until::binary-size(8)>>,
+      contact_url,
+      <<0>>,
+      <<recieved_as::8>>,
+      seller_name,
+      null_byte,
+      description,
+      null_byte,
+      picture_mime,
+      <<0>>,
+      logo
+    ]
+
+    frame_size = IO.iodata_length(frame_binary)
+    header = encode_header(frame, frame_size, tag)
+    IO.iodata_to_binary([header, frame_binary])
+  end
+
   def encode_frame(%Frame{raw_data: raw} = frame, tag) do
     if frame.flags.tag_alter_preservation do
       # According to spec, discard unknown frame if flag is set for it and tag is modified
@@ -826,7 +896,7 @@ defmodule Id3vx.Frame do
     }
   end
 
-  def parse("MCDI" = id, tag, _flags, data) do
+  def parse("MCDI" = id, _tag, _flags, data) do
     cd_toc_binary = data
 
     %Frame{
@@ -892,7 +962,45 @@ defmodule Id3vx.Frame do
     }
   end
 
-  def parse(id, _tag, _flags, data) do
+  def parse("COMR" = id, _tag, _flags, data) do
+    <<encoding::size(8), rest::binary>> = data
+    encoding = @text_encoding[encoding]
+
+    [price, rest] = :binary.split(rest, <<0>>)
+
+    <<valid_until::binary-size(8), rest::binary>> = rest
+
+    [contact_url, rest] = :binary.split(rest, <<0>>)
+
+    <<recieved_as::size(8), rest::binary>> = rest
+    recieved_as = @recieved_as_type[recieved_as]
+
+    {seller_name, rest} = split_at_null(encoding, rest)
+
+    {description, rest} = split_at_null(encoding, rest)
+    description = convert_string(encoding, description)
+
+    [picture_mime, rest] = :binary.split(rest, <<0>>)
+
+    logo = rest
+
+    %Frame{
+      id: id,
+      data: %Frame.Commercial{
+        encoding: encoding,
+        price: price,
+        valid_until: valid_until,
+        contact_url: contact_url,
+        recieved_as: recieved_as,
+        seller_name: seller_name,
+        description: description,
+        picture_mime: picture_mime,
+        logo: logo
+      }
+    }
+  end
+
+  def parse(id, _tag, _flags, _data) do
     %Frame{
       id: id,
       label: "#{id} is not implemented, please contribute, it's not hard.",
