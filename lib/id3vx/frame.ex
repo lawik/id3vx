@@ -120,6 +120,11 @@ defmodule Id3vx.Frame do
     0x03 => :utf8
   }
 
+  @boolean_encoding %{
+    0x00 => false,
+    0x01 => true
+  }
+
   @type text_encoding_v3 :: :iso8859_1 | :utf16
   @type text_encoding_v4 :: :iso8859_1 | :utf16 | :utf16be | :utf8
 
@@ -474,6 +479,20 @@ defmodule Id3vx.Frame do
     IO.iodata_to_binary([header, frame_binary])
   end
 
+  def encode_frame(%Frame{id: "RBUF"} = frame, %{version: 3} = tag) do
+    %Frame.RecommendedBufferSize{
+      buffer_size: buffer_size,
+      embedded_info: embedded_info,
+      offset: offset
+    } = frame.data
+
+    embedded_info = boolean_byte(embedded_info)
+    frame_binary = [<<buffer_size::24>>, <<embedded_info::8>>, <<offset::32>>]
+    frame_size = IO.iodata_length(frame_binary)
+    header = encode_header(frame, frame_size, tag)
+    IO.iodata_to_binary([header, frame_binary])
+  end
+
   def encode_frame(%Frame{raw_data: raw} = frame, tag) do
     if frame.flags.tag_alter_preservation do
       # According to spec, discard unknown frame if flag is set for it and tag is modified
@@ -693,6 +712,19 @@ defmodule Id3vx.Frame do
     }
   end
 
+  def parse("RBUF" = id, _tag, _flags, data) do
+    <<buffer_size::size(24), embedded_info::size(8), offset::size(32)>> = data
+
+    %Frame{
+      id: id,
+      data: %Frame.RecommendedBufferSize{
+        buffer_size: buffer_size,
+        embedded_info: embedded_info,
+        offset: offset
+      }
+    }
+  end
+
   def parse(id, _tag, _flags, data) do
     %Frame{
       id: id,
@@ -831,5 +863,11 @@ defmodule Id3vx.Frame do
     @text_encoding
     |> Utils.flip_map()
     |> Map.get(encoding)
+  end
+
+  defp boolean_byte(boolean) do
+    @boolean_encoding
+    |> Utils.flip_map()
+    |> Map.get(boolean)
   end
 end
