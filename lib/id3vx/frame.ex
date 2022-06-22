@@ -479,7 +479,7 @@ defmodule Id3vx.Frame do
       offset: offset
     } = frame.data
 
-    frame_binary = [<<offset::size(32)>>]
+    frame_binary = [<<offset::32>>]
 
     frame_size = IO.iodata_length(frame_binary)
     header = encode_header(frame, frame_size, tag)
@@ -706,7 +706,7 @@ defmodule Id3vx.Frame do
   end
 
   def parse("SEEK" = id, _tag, _flags, data) do
-    <<offset::binary-size(32)>> = data
+    <<offset::32>> = data
 
     %Frame{
       id: id,

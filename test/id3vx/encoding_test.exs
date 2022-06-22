@@ -364,7 +364,7 @@ defmodule Id3vx.EncodingTest do
     assert <<"SEEK", frame_size::size(32), _flags::binary-size(2)>> = frame_header
     assert 4 == frame_size
 
-    <<offset::size(32)>> = frame_data
+    <<offset::32>> = frame_data
 
     assert offset == frame.data.offset
   end
