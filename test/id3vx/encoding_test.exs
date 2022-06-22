@@ -385,7 +385,6 @@ defmodule Id3vx.EncodingTest do
 
     binary = Frame.encode_frame(frame, %Tag{version: 3})
     assert <<frame_header::binary-size(10), frame_data::binary>> = binary
-
     assert <<"PRIV", frame_size::size(32), _flags::binary-size(2)>> = frame_header
     assert 19 == frame_size
 
@@ -498,5 +497,40 @@ defmodule Id3vx.EncodingTest do
     <<0x02::size(16), 0xA::size(16), encryption_info::binary>> = rest
 
     assert encryption_info == frame.data.encryption_info
+  end
+
+  test "v2.3 encoding COMR frame" do
+    frame = %Frame{
+      id: "COMR",
+      flags: %FrameFlags{},
+      data: %Frame.Commercial{
+        encoding: :utf16,
+        price: "SEK100",
+        valid_until: "20220101",
+        contact_url: "http://example.com",
+        recieved_as: :standard_cd_album_with_other_songs,
+        seller_name: "Joe",
+        description: "this is a soft description",
+        picture_mime: "image/jpeg",
+        logo: "random bit string"
+      }
+    }
+
+    binary = Frame.encode_frame(frame, %Tag{version: 3})
+    assert <<frame_header::binary-size(10), frame_data::binary>> = binary
+    assert <<"COMR", frame_size::size(32), _flags::binary-size(2)>> = frame_header
+    assert 97 == frame_size
+
+    assert <<0x01::size(8), frame_rest::binary>> = frame_data
+
+    [price, frame_rest] = :binary.split(frame_rest, <<0>>)
+    assert price == frame.data.price
+
+    <<valid_until::binary-size(8), frame_rest::binary>> = frame_rest
+
+    assert valid_until == frame.data.valid_until
+
+    [contact_url, _rest] = :binary.split(frame_rest, <<0>>)
+    assert contact_url == frame.data.contact_url
   end
 end
