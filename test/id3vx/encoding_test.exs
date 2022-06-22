@@ -349,4 +349,23 @@ defmodule Id3vx.EncodingTest do
     assert description == frame.data.description
     assert url == frame.data.url
   end
+
+  test "v2.3 encoding SEEK frame" do
+    frame = %Frame{
+      id: "SEEK",
+      flags: %FrameFlags{},
+      data: %Frame.Seek{
+        offset: 32
+      }
+    }
+
+    binary = Frame.encode_frame(frame, %Tag{version: 3})
+    assert <<frame_header::binary-size(10), frame_data::binary>> = binary
+    assert <<"SEEK", frame_size::size(32), _flags::binary-size(2)>> = frame_header
+    assert 4 == frame_size
+
+    <<offset::size(32)>> = frame_data
+
+    assert offset == frame.data.offset
+  end
 end

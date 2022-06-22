@@ -474,6 +474,18 @@ defmodule Id3vx.Frame do
     IO.iodata_to_binary([header, frame_binary])
   end
 
+  def encode_frame(%Frame{id: "SEEK"} = frame, %{version: 3} = tag) do
+    %Frame.Seek{
+      offset: offset
+    } = frame.data
+
+    frame_binary = [<<offset::size(32)>>]
+
+    frame_size = IO.iodata_length(frame_binary)
+    header = encode_header(frame, frame_size, tag)
+    IO.iodata_to_binary([header, frame_binary])
+  end
+
   def encode_frame(%Frame{raw_data: raw} = frame, tag) do
     if frame.flags.tag_alter_preservation do
       # According to spec, discard unknown frame if flag is set for it and tag is modified
@@ -689,6 +701,17 @@ defmodule Id3vx.Frame do
         price_paid: price_paid,
         date: date,
         seller: seller
+      }
+    }
+  end
+
+  def parse("SEEK" = id, _tag, _flags, data) do
+    <<offset::binary-size(32)>> = data
+
+    %Frame{
+      id: id,
+      data: %Frame.Seek{
+        offset: offset
       }
     }
   end
