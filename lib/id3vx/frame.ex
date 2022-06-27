@@ -179,6 +179,29 @@ defmodule Id3vx.Frame do
 
   def picture_types, do: @picture_type
 
+  @channel_type %{
+    0x00 => :other,
+    0x01 => :master_volume,
+    0x02 => :front_right,
+    0x03 => :front_left,
+    0x04 => :back_right,
+    0x05 => :back_left,
+    0x06 => :front_centre,
+    0x07 => :back_centre,
+    0x08 => :subwoofer
+  }
+  @type channel_type ::
+          :other
+          | :master_volume
+          | :front_right
+          | :front_left
+          | :back_right
+          | :back_left
+          | :front_centre
+          | :back_centre
+          | :subwoofer
+
+  def channel_types, do: @channel_type
   @spec encode_frame(Frame.t(), Id3vx.Tag.t()) :: binary()
   def encode_frame(frame, tag)
 
