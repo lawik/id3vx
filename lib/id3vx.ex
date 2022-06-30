@@ -192,11 +192,7 @@ defmodule Id3vx do
 
     case parse_tag(data) do
       {:ok, tag} ->
-        if tag.flags.extended_header do
-          {:parse_extended_header, source, tag}
-        else
-          {:parse_frames, source, tag}
-        end
+        {:parse_frames, source, tag}
 
       :not_found ->
         throw(%Error{message: "Tag not found", context: :parse_prepend_tag})
@@ -204,32 +200,6 @@ defmodule Id3vx do
   end
 
   defp parse_step(source, :parse_extended_header, tag) do
-    {data, source} = get_bytes(source, 6)
-    ext_header = parse_extended_header_fixed(tag, data)
-    tag = %{tag | extended_header: ext_header}
-    # Implement rest of ext header parsing, for now, we pull the data
-    # to get it out of the way and that's a way to just skip the extended
-    # header
-    {_data, source} =
-      case tag.version do
-        # Different calculations, same results
-        4 ->
-          get_bytes(source, ext_header.size - 6)
-
-        3 ->
-          if tag.flags.unsynchronisation do
-            throw(%Error{
-              message: "v3 unsynchronization not implemented!",
-              context: :parse_extended_header
-            })
-          end
-
-          get_bytes(source, ext_header.size - 6)
-      end
-
-    # TODO: Actually handle the extended header
-    # {:parse_extended_header_flags, source, tag}
-
     {:parse_frames, source, tag}
   end
 
@@ -248,6 +218,17 @@ defmodule Id3vx do
         data
       end
 
+    {tag, data} =
+      if tag.flags.extended_header do
+        <<ext_header_size::size(32), data::binary>> = data
+        full_ext_header_size = ext_header_size + 4
+        <<ext_data::binary-size(full_ext_header_size), data::binary>> = data
+        ext_header = parse_extended_header_fixed(tag, ext_data)
+        {%{tag | extended_header: ext_header}, data}
+      else
+        {tag, data}
+      end
+
     frames = parse_frames(tag, data)
     tag = %{tag | frames: frames}
 
@@ -264,7 +245,7 @@ defmodule Id3vx do
       |> subtract_extended_header(tag)
       |> subtract_footer(tag)
 
-    {data, source} = get_bytes(source, frames_size)
+    {data, _source} = get_bytes(source, frames_size)
 
     data =
       if tag.flags.unsynchronisation do
@@ -276,11 +257,7 @@ defmodule Id3vx do
     frames = parse_frames(tag, data, [])
     tag = %{tag | frames: frames}
 
-    if tag.flags.footer do
-      {:parse_footer, source, tag}
-    else
-      {:done, tag}
-    end
+    {:done, tag}
   end
 
   defp parse_step(_source, step, state) do
@@ -292,16 +269,21 @@ defmodule Id3vx do
         <<"ID3", 4::integer, minor::integer, unsynchronisation::size(1), extended_header::size(1),
           experimental::size(1), footer::size(1), _unused::size(4), tag_size::binary-size(4)>>
       ) do
-    flags = %TagFlags{
-      unsynchronisation: unsynchronisation == 1,
-      extended_header: extended_header == 1,
-      experimental: experimental == 1,
-      footer: footer == 1
-    }
+    if true do
+      throw(%Error{message: "ID3v2.4 is not currently supported. Contributions are welcome."})
+    else
+      # Started implementation of version: 4
+      flags = %TagFlags{
+        unsynchronisation: unsynchronisation == 1,
+        extended_header: extended_header == 1,
+        experimental: experimental == 1,
+        footer: footer == 1
+      }
 
-    tag_size = decode_synchsafe_integer(tag_size)
+      tag_size = decode_synchsafe_integer(tag_size)
 
-    {:ok, %Tag{version: 4, revision: minor, flags: flags, size: tag_size}}
+      {:ok, %Tag{version: 4, revision: minor, flags: flags, size: tag_size}}
+    end
   end
 
   def parse_tag(
@@ -343,13 +325,21 @@ defmodule Id3vx do
 
   defp parse_extended_header_fixed(
          %{version: 3},
-         <<size::binary-size(4), crc_data_present::1, _::15, _padding_size::binary-size(4)>>
+         <<size::binary-size(4), crc_data_present::1, _::15, rest::binary>>
        ) do
+    {crc_data, padding_size} =
+      case rest do
+        <<padding_size::size(32)>> -> {nil, padding_size}
+        <<padding_size::size(32), crc_data::binary-size(4)>> -> {crc_data, padding_size}
+      end
+
     %ExtendedHeaderV3{
       size: size,
       flags: %ExtendedHeaderFlags{
         crc_data_present: crc_data_present == 1
-      }
+      },
+      crc_data: crc_data,
+      padding_size: padding_size
     }
   end
 
@@ -526,6 +516,7 @@ defmodule Id3vx do
   end
 
   def unsynchronise_if_needed(data, desynched? \\ false, processed \\ []) do
+    # TODO: I don't believe we handle the unsynchronisation corner-case of ending on 0xff currently
     case data do
       <<>> ->
         {IO.iodata_to_binary(processed), desynched?}
@@ -544,6 +535,7 @@ defmodule Id3vx do
 
   # Candidate for decoding
   def decode_unsynchronized(<<0xFF::8, 0x00::8, _::binary>> = data, decoded) do
+    # TODO: I don't believe we handle the unsynchronisation corner-case of ending on 0xff currently
     {sample, remainder} =
       case data do
         <<sample::binary-size(3)>> -> {sample, <<>>}
