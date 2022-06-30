@@ -1,4 +1,8 @@
 defmodule Id3vx.Frame.CustomURL do
+  @moduledoc """
+  WXXX frame struct.
+  """
+
   defstruct encoding: :utf16, description: nil, url: nil
 
   alias Id3vx.Frame

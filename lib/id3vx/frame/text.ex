@@ -1,4 +1,8 @@
 defmodule Id3vx.Frame.Text do
+  @moduledoc """
+  Text frame structs, all T??? frames.
+  """
+
   defstruct encoding: :utf16, text: []
 
   alias Id3vx.Frame

@@ -1,4 +1,6 @@
 defmodule Id3vx.Utils do
+  @moduledoc false
+
   def pad_to_byte_size(not_binary, size) when not is_binary(not_binary) do
     pad_to_byte_size(<<not_binary>>, size)
   end

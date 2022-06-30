@@ -1,5 +1,6 @@
 defmodule Id3vx.Frame do
   @moduledoc """
+  Implementation of frame parsing and encoding.
 
   Natives types:
     AENC Audio encryption

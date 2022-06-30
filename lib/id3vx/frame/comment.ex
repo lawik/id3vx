@@ -1,4 +1,8 @@
 defmodule Id3vx.Frame.Comment do
+  @moduledoc """
+  COMM frame struct.
+  """
+
   defstruct encoding: :utf16,
             language: nil,
             content_description: nil,

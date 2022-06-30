@@ -1,4 +1,8 @@
 defmodule Id3vx.Frame.TableOfContents do
+  @moduledoc """
+  CTOC frame struct.
+  """
+
   defstruct element_id: nil,
             top_level: nil,
             ordered: nil,

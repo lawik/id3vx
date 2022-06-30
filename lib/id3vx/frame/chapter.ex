@@ -1,4 +1,8 @@
 defmodule Id3vx.Frame.Chapter do
+  @moduledoc """
+  CHAP frame struct.
+  """
+
   defstruct element_id: nil,
             start_time: nil,
             end_time: nil,

@@ -1,4 +1,8 @@
 defmodule Id3vx.Frame.AttachedPicture do
+  @moduledoc """
+  APIC frame struct.
+  """
+
   defstruct encoding: :utf16,
             mime_type: nil,
             picture_type: :other,

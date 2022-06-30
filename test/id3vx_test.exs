@@ -1,6 +1,6 @@
 defmodule Id3vxTest do
   use ExUnit.Case
-  # doctest Id3vx
+  doctest Id3vx
   require Logger
   alias Id3vx.Tag
   alias Id3vx.Frame

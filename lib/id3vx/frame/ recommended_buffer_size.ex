@@ -1,4 +1,8 @@
 defmodule Id3vx.Frame.RecommendedBufferSize do
+  @moduledoc """
+  RBUF frame struct.
+  """
+
   defstruct buffer_size: nil,
             embedded_info: false,
             offset: nil

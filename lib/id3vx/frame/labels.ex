@@ -1,4 +1,10 @@
 defmodule Id3vx.Frame.Labels do
+  @moduledoc """
+  Provides the full set of frames and their labels.
+
+  Generated from priv/generate-labels.exs.
+  """
+
   @labels %{
     "WPUB" => "Publishers official webpage",
     "OWNE" => "Ownership frame",
@@ -27,6 +33,7 @@ defmodule Id3vx.Frame.Labels do
     "TSOA" => "Album sort order",
     "TSSE" => "Software/Hardware and settings used for encoding",
     "TKEY" => "Initial key",
+    "WFED" => "Podcast link",
     "TRCK" => "Track number/Position in set",
     "TBPM" => "BPM (beats per minute)",
     "TALB" => "Album/Movie/Show title",

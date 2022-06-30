@@ -2,6 +2,28 @@ defmodule Id3vx do
   @moduledoc """
   Provides the API for interacting with ID3 tags and files that
   contain them.
+
+  ## Examples
+
+  ### Parse from file
+
+      iex> {:ok, tag} = Id3vx.parse_file("test/samples/beamradio32.mp3")
+      ...> tag.version
+      3
+
+  ### Encode new tag
+
+      iex> Id3vx.Tag.create(3) |> Id3vx.Tag.add_text_frame("TIT1", "Title!") |> Id3vx.encode_tag()
+      <<73, 68, 51, 3, 0, 0, 0, 0, 0, 27, 84, 73, 84, 49, 0, 0, 0, 17, 0, 0, 1, 254, 255, 0, 84, 0, 105, 0, 116, 0, 108, 0, 101, 0, 33, 0, 0>>
+
+  ### Parse from binary
+
+      iex> tag = Id3vx.Tag.create(3) |> Id3vx.Tag.add_text_frame("TIT1", "Title!")
+      ...> tag_binary = Id3vx.encode_tag(tag)
+      ...> {:ok, tag} = Id3vx.parse_binary(tag_binary)
+      ...> tag.version
+      3
+
   """
 
   use Bitwise
@@ -28,6 +50,9 @@ defmodule Id3vx do
     :parse_append_tag,
     :done
   ]
+
+  @doc false
+  def parse_states, do: @parse_states
 
   @doc """
   Parse an ID3 tag from the given file path.

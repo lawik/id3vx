@@ -1,16 +1,19 @@
 # Id3vx
 
-**TODO: Add description**
+A library for reading and writing ID3 tags.
+
+It currently supports only ID3v2.3. It specifically also supports Chapters and Table of Contents as it was created to support podcast chapters as a specific usage.
+
+This library development was funded and open-sourced by [Changelog Media](https://changelog.com).
 
 ## Installation
 
-If [available in Hex](https://hex.pm/docs/publish), the package can be installed
-by adding `id3vx` to your list of dependencies in `mix.exs`:
+Until a Hex package is published this can be used with:
 
 ```elixir
 def deps do
   [
-    {:id3vx, "~> 0.1.0"}
+    {:id3vx, github: "lawik/id3vx"}
   ]
 end
 ```
