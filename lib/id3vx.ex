@@ -127,7 +127,7 @@ defmodule Id3vx do
   def encode_tag(%Tag{version: 3} = tag) do
     frames = encode_frames(tag)
 
-    {frames, desynched?} = unsynchronise_if_needed(frames)
+    {frames, desynched?, _padded?} = unsynchronise_if_needed(frames)
 
     tag_flags =
       if is_nil(tag.flags) do
@@ -138,7 +138,11 @@ defmodule Id3vx do
 
     tag = %{tag | flags: %{tag_flags | unsynchronisation: desynched?}}
     flags = TagFlags.as_binary(tag.flags, tag)
-    tag_size = frames |> byte_size() |> encode_synchsafe_integer()
+
+    tag_size =
+      frames
+      |> byte_size()
+      |> encode_synchsafe_integer()
 
     IO.iodata_to_binary([
       "ID3",
@@ -516,10 +520,18 @@ defmodule Id3vx do
   end
 
   def unsynchronise_if_needed(data, desynched? \\ false, processed \\ []) do
-    # TODO: I don't believe we handle the unsynchronisation corner-case of ending on 0xff currently
+    padded? = false
+
     case data do
       <<>> ->
-        {IO.iodata_to_binary(processed), desynched?}
+        {IO.iodata_to_binary(processed), desynched?, padded?}
+
+      <<0xFF::8>> ->
+        # Corner-case, pad one null byte
+        padded? = true
+        desynched? = true
+        processed = [processed, 0xFF, 0x00]
+        {IO.iodata_to_binary(processed), desynched?, padded?}
 
       # False synchronisation
       <<0xFF::8, 1::3, rem::5, rest::binary>> ->
@@ -535,33 +547,38 @@ defmodule Id3vx do
 
   # Candidate for decoding
   def decode_unsynchronized(<<0xFF::8, 0x00::8, _::binary>> = data, decoded) do
-    # TODO: I don't believe we handle the unsynchronisation corner-case of ending on 0xff currently
-    {sample, remainder} =
-      case data do
-        <<sample::binary-size(3)>> -> {sample, <<>>}
-        <<sample::binary-size(3), rest::binary>> -> {sample, rest}
-      end
-
-    <<0xFF::8, 0x00::8, third::8>> = sample
-
-    fixed =
-      case <<third::8>> do
-        <<1::3, bits::5>> ->
-          <<0xFF, 1::3, bits::5>>
-
-        <<0::8>> ->
-          <<0xFF, 0x00>>
-
-        <<any::8>> ->
-          <<0xFF, 0x00, any>>
-      end
-
-    decoded = decoded <> fixed
-
-    if byte_size(remainder) == 0 do
-      decoded
+    if byte_size(data) < 3 do
+      # Can't be false sync
+      decoded <> data
     else
-      decode_unsynchronized(remainder, decoded)
+      {sample, remainder} =
+        case data do
+          <<sample::binary-size(3)>> -> {sample, <<>>}
+          <<sample::binary-size(3), rest::binary>> -> {sample, rest}
+          sample -> {sample, <<>>}
+        end
+
+      <<0xFF::8, 0x00::8, third::8>> = sample
+
+      fixed =
+        case <<third::8>> do
+          <<1::3, bits::5>> ->
+            <<0xFF, 1::3, bits::5>>
+
+          <<0::8>> ->
+            <<0xFF, 0x00>>
+
+          <<any::8>> ->
+            <<0xFF, 0x00, any>>
+        end
+
+      decoded = decoded <> fixed
+
+      if byte_size(remainder) == 0 do
+        decoded
+      else
+        decode_unsynchronized(remainder, decoded)
+      end
     end
   end
 
