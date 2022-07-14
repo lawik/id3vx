@@ -98,6 +98,8 @@ defmodule Id3vx.Frame do
             raw_data: nil
 
   alias Id3vx.Frame
+  alias Id3vx.FrameFlags
+  alias Id3vx.Frame.Labels
 
   @type t :: %Frame{
           id: String.t(),
@@ -560,7 +562,7 @@ defmodule Id3vx.Frame do
     <<start_time::size(32), end_time::size(32), start_offset::size(32), end_offset::size(32),
       sub_frames_data::binary>> = data
 
-    sub_frames = Id3vx.parse_frames(tag, sub_frames_data)
+    sub_frames = parse_frames(tag, sub_frames_data)
 
     %Frame{
       id: id,
@@ -591,7 +593,7 @@ defmodule Id3vx.Frame do
 
     sub_frames =
       if byte_size(rest) > 0 do
-        Id3vx.parse_frames(tag, rest)
+        parse_frames(tag, rest)
       else
         []
       end
@@ -731,6 +733,136 @@ defmodule Id3vx.Frame do
       id: id,
       label: "#{id} is not implemented, please contribute, it's not hard.",
       data: %Frame.Unknown{unused: :frame}
+    }
+  end
+
+  def parse_frames(tag, frames_data, frames \\ [])
+
+  def parse_frames(%{version: 4} = tag, frames_data, frames) do
+    # A tag must have at least one frame, a frame must have at least one byte
+    # in it after the header
+    <<id::binary-size(4), frame_size::binary-size(4), flags::binary-size(2), frames_data::binary>> =
+      frames_data
+
+    decoded_frame_size = Utils.decode_synchsafe_integer(frame_size)
+
+    {frame_data, frames_data} =
+      case frames_data do
+        <<frame_data::binary-size(decoded_frame_size)>> -> {frame_data, <<>>}
+        <<frame_data::binary-size(decoded_frame_size), rest::binary>> -> {frame_data, rest}
+      end
+
+    flags = parse_frame_flags(flags, tag)
+
+    frame = parse_frame(tag, id, decoded_frame_size, flags, frame_data)
+    frames = [frame | frames]
+
+    # Does it contain enough data for another frame?
+    if byte_size(frames_data) > 10 do
+      parse_frames(tag, frames_data, frames)
+    else
+      Enum.reverse(frames)
+    end
+  end
+
+  def parse_frames(%{version: 3} = tag, frames_data, frames) do
+    # A tag must have at least one frame, a frame must have at least one byte
+    # in it after the header
+    <<id::binary-size(4), frame_size::binary-size(4), flags::binary-size(2), frames_data::binary>> =
+      frames_data
+
+    frame_size = :binary.decode_unsigned(frame_size, :big)
+
+    {frames_data, frames} =
+      cond do
+        not Regex.match?(~r/[A-Z0-9]{4}/, id) ->
+          Logger.warn("Invalid frame ID. Weird.")
+          {frames_data, frames, false}
+
+        byte_size(frames_data) < frame_size ->
+          Logger.warn("Frame data is less than parsed size field. Weird.")
+          {frames_data, frames, false}
+
+        true ->
+          {frame_data, frames_data} =
+            case frames_data do
+              <<frame_data::binary-size(frame_size)>> -> {frame_data, <<>>}
+              <<frame_data::binary-size(frame_size), rest::binary>> -> {frame_data, rest}
+            end
+
+          flags = parse_frame_flags(flags, tag)
+
+          frame = parse_frame(tag, id, frame_size, flags, frame_data)
+          frames = [frame | frames]
+          {frames_data, frames}
+      end
+
+    # Does it contain enough data for another frame?
+    if byte_size(frames_data) > 10 do
+      parse_frames(tag, frames_data, frames)
+    else
+      Enum.reverse(frames)
+    end
+  end
+
+  defp parse_frame(%{version: 3} = tag, id, size, flags, data) do
+    {gi, data} =
+      if flags.grouping_identity do
+        <<gi::8, data::binary>> = data
+        {gi, data}
+      else
+        {nil, data}
+      end
+
+    frame = Frame.parse(id, tag, flags, data)
+
+    %{
+      frame
+      | size: size,
+        flags: flags,
+        label: Labels.from_id(frame.id),
+        raw_data: data,
+        grouping_identity: gi
+    }
+  end
+
+  defp parse_frame(%Tag{version: 4} = tag, id, size, flags, data) do
+    data =
+      if flags.unsynchronisation do
+        Utils.decode_unsynchronized(data)
+      else
+        data
+      end
+
+    frame = Frame.parse(id, tag, flags, data)
+    %{frame | size: size, flags: flags, raw_data: data}
+  end
+
+  defp parse_frame_flags(flags, %{version: 4}) do
+    <<0::1, tap::1, fap::1, ro::1, 0::4, gi::1, 0::2, c::1, e::1, u::1, dli::1>> = flags
+
+    %FrameFlags{
+      tag_alter_preservation: tap == 1,
+      file_alter_preservation: fap == 1,
+      read_only: ro == 1,
+      grouping_identity: gi == 1,
+      compression: c == 1,
+      encryption: e == 1,
+      unsynchronisation: u == 1,
+      data_length_indicator: dli == 1
+    }
+  end
+
+  defp parse_frame_flags(flags, %{version: 3}) do
+    <<tap::1, fap::1, ro::1, 0::5, c::1, e::1, gi::1, 0::5>> = flags
+
+    %FrameFlags{
+      tag_alter_preservation: tap == 1,
+      file_alter_preservation: fap == 1,
+      read_only: ro == 1,
+      compression: c == 1,
+      encryption: e == 1,
+      grouping_identity: gi == 1
     }
   end
 

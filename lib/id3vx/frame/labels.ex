@@ -93,6 +93,10 @@ defmodule Id3vx.Frame.Labels do
     "WOAR" => "Official artist/performer webpage"
   }
 
+  def all do
+    @labels
+  end
+
   def from_id(id) do
     @labels[id]
   end

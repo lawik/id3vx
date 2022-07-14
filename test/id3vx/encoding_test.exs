@@ -35,7 +35,7 @@ defmodule Id3vx.EncodingTest do
 
     assert <<tag_header::binary-size(10), tag_rest::binary>> = binary
     assert <<"ID3", 3::integer, 0::integer, 0::size(8), tag_size::binary-size(4)>> = tag_header
-    tag_size = Id3vx.decode_synchsafe_integer(tag_size)
+    tag_size = Id3vx.Utils.decode_synchsafe_integer(tag_size)
     assert 31 == tag_size
 
     assert <<"TIT2", frame_size::size(32), _flags::binary-size(2), frames_data::binary>> =
@@ -53,8 +53,8 @@ defmodule Id3vx.EncodingTest do
     for num1 <- 1..256 do
       num2 =
         num1
-        |> Id3vx.encode_synchsafe_integer()
-        |> Id3vx.decode_synchsafe_integer()
+        |> Id3vx.Utils.encode_synchsafe_integer()
+        |> Id3vx.Utils.decode_synchsafe_integer()
 
       assert num1 == num2
     end
@@ -64,14 +64,14 @@ defmodule Id3vx.EncodingTest do
 
       num2 =
         num1
-        |> Id3vx.encode_synchsafe_integer()
-        |> Id3vx.decode_synchsafe_integer()
+        |> Id3vx.Utils.encode_synchsafe_integer()
+        |> Id3vx.Utils.decode_synchsafe_integer()
 
       assert num1 == num2
     end
 
     try do
-      Id3vx.encode_synchsafe_integer(max)
+      Id3vx.Utils.encode_synchsafe_integer(max)
       refute true
     catch
       e ->

@@ -34,7 +34,7 @@ defmodule Id3vx.Frame.FrameFlagsTest do
     assert <<"ID3", 3::integer, 0::integer, 0b10000000::size(8), tag_size::binary-size(4)>> =
              tag_header
 
-    tag_size = Id3vx.decode_synchsafe_integer(tag_size)
+    tag_size = Id3vx.Utils.decode_synchsafe_integer(tag_size)
 
     assert <<"TIT2", frame_size::size(32), 0::size(8), 1::1, 0::7, 0::8, 0::8, 0::8, 61::8,
              _compressed_data::binary>> = tag_rest
