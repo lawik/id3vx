@@ -13,4 +13,11 @@ defmodule Id3vx.Frame.CustomURL do
           description: String.t(),
           url: String.t()
         }
+
+  def new(description, url) do
+    %CustomURL{
+      description: description,
+      url: url
+    }
+  end
 end

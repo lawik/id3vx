@@ -1,6 +1,8 @@
 defmodule Id3vx.Tag do
   @moduledoc """
-  The base data structure for the ID3 tag.
+  Utility module for building ID3 tags and common frames conveniently.
+
+
   """
 
   defstruct version: nil,
@@ -25,10 +27,24 @@ defmodule Id3vx.Tag do
           frames: [Id3vx.Frame.t()]
         }
 
+  @doc """
+  Create a new blank tag for a specific version of the ID3 spec.
+  """
+  @spec create(version :: integer()) :: Tag.t()
   def create(version) do
     %Tag{version: version, revision: 0, frames: []}
   end
 
+  @doc """
+  Add a picture to a `Id3vx.Tag` or `Id3vx.Frame.Chapter`.
+  """
+  @spec add_attached_picture(
+          container :: Tag.t() | Frame.Chapter.t(),
+          description :: String.t(),
+          mime_type :: String.t(),
+          image_data :: binary(),
+          picture_type :: atom()
+        ) :: Tag.t() | Frame.Chapter.t()
   def add_attached_picture(container, description, mime_type, image_data, picture_type \\ :other) do
     frame = %Frame{
       id: "APIC",
@@ -46,6 +62,38 @@ defmodule Id3vx.Tag do
     %{container | frames: [frame | container.frames]}
   end
 
+  @doc """
+  Add a custom URL to a `Id3vx.Tag` or `Id3vx.Frame.Chapter`.
+
+  Typically used for Chapters.
+  """
+  @spec add_custom_url(
+          container :: Tag.t() | Frame.Chapter.t(),
+          description :: String.t(),
+          url :: String.t()
+        ) :: Tag.t() | Frame.Chapter.t()
+  def add_custom_url(container, description, url) do
+    frame = %Frame{
+      id: "WXXX",
+      flags: FrameFlags.all_false(),
+      label: Id3vx.Frame.Labels.from_id("WXXX"),
+      data: %Frame.CustomURL{
+        description: description,
+        url: url
+      }
+    }
+
+    %{container | frames: [frame | container.frames]}
+  end
+
+  @doc """
+  Add a text frame to a `Id3vx.Tag` or `Id3vx.Frame.Chapter`.
+  """
+  @spec add_text_frame(
+          container :: Tag.t() | Frame.Chapter.t(),
+          frame_id :: String.t(),
+          text :: String.t()
+        ) :: Tag.t() | Frame.Chapter.t()
   def add_text_frame(container, frame_id, text) when is_binary(text) do
     add_text_frame(container, frame_id, [text])
   end
@@ -65,6 +113,25 @@ defmodule Id3vx.Tag do
   end
 
   @typical_element_prefix "chp"
+  @doc """
+  Add a typical `Id3vx.Frame.Chapter` frame to a tag.
+
+  The callback gets the new chapter frame and is normally used to add
+  sub-frames like text, links, pictures using the other tag-building
+  utilities in this module.
+
+  It also creates a matching Table of Content frame and entry.
+  Essentially it tries to take care of all the annoying bits.
+  """
+  @spec add_typical_chapter_and_toc(
+          tag :: Tag.t(),
+          start_time :: integer(),
+          end_time :: integer(),
+          start_offset :: integer(),
+          end_offset :: integer(),
+          title :: String.t(),
+          callback :: (Frame.Chapter.t() -> Frame.Chapter.t())
+        ) :: Tag.t()
   def add_typical_chapter_and_toc(
         tag,
         start_time,
@@ -159,7 +226,18 @@ defmodule Id3vx.Tag do
     end
   end
 
-  @spec change_elements(container :: map(), frame_id :: String.t(), callback :: fun()) :: map()
+  @doc """
+  Change frames in a `Id3vx.Tag` or `Id3vx.Frame.Chapter`.
+
+  Runs the callback on all frames that match the frame ID.
+
+  Returns the updated container.
+  """
+  @spec change_elements(
+          container :: Tag.t() | Frame.Chapter.t(),
+          frame_id :: String.t(),
+          callback :: fun()
+        ) :: Tag.t() | Frame.Chapter.t()
   def change_elements(container, frame_id, callback) do
     frames =
       Enum.map(container.frames, fn frame ->
@@ -173,12 +251,19 @@ defmodule Id3vx.Tag do
     %{container | frames: frames}
   end
 
+  @doc """
+  Change specific frame in a `Id3vx.Tag` or `Id3vx.Frame.Chapter`.
+
+  Runs the callback on all frames that match the frame ID and the element ID.
+
+  Returns the updated container.
+  """
   @spec change_element(
-          container :: map(),
+          container :: Tag.t() | Frame.Chapter.t(),
           frame_id :: String.t(),
           element_id :: String.t(),
           callback :: fun()
-        ) :: map()
+        ) :: Tag.t() | Frame.Chapter.t()
   def change_element(container, frame_id, element_id, callback) do
     frames =
       Enum.map(container.frames, fn frame ->
@@ -197,15 +282,31 @@ defmodule Id3vx.Tag do
     %{container | frames: frames}
   end
 
-  @spec find_element(container :: map(), frame_id :: String.t()) :: Frame.t() | nil
+  @doc """
+  Find specific frame in a `Id3vx.Tag` or `Id3vx.Frame.Chapter`.
+
+  Returns the frame if anything matches the frame ID or nil if nothing was found.
+  """
+  @spec find_element(
+          container :: Tag.t() | Frame.Chapter.t(),
+          frame_id :: String.t()
+        ) :: Frame.t() | nil
   def find_element(container, frame_id) do
     Enum.find(container.frames, fn f ->
       f.id == frame_id
     end)
   end
 
-  @spec find_element(container :: map(), frame_id :: String.t(), element_id :: String.t()) ::
-          Frame.t() | nil
+  @doc """
+  Find specific frame in a `Id3vx.Tag` or `Id3vx.Frame.Chapter`.
+
+  Returns the frame if anything matches the frame ID and element ID, or nil if nothing was found.
+  """
+  @spec find_element(
+          container :: Tag.t() | Frame.Chapter.t(),
+          frame_id :: String.t(),
+          element_id :: String.t()
+        ) :: Frame.t() | nil
   def find_element(container, frame_id, element_id) do
     Enum.find(container.frames, fn frame ->
       case frame do
@@ -221,7 +322,17 @@ defmodule Id3vx.Tag do
     end)
   end
 
-  @spec delete_elements(container :: map(), frame_id :: String.t()) :: map()
+  @doc """
+  Delete frames in a `Id3vx.Tag` or `Id3vx.Frame.Chapter`.
+
+  Deletes all frames matching frame ID.
+
+  Returns the updated container.
+  """
+  @spec delete_elements(
+          container :: Tag.t() | Frame.Chapter.t(),
+          frame_id :: String.t()
+        ) :: Tag.t() | Frame.Chapter.t()
   def delete_elements(container, frame_id) do
     frames =
       Enum.reject(container.frames, fn f ->
@@ -231,8 +342,17 @@ defmodule Id3vx.Tag do
     %{container | frames: frames}
   end
 
-  @spec delete_chapter(container :: map(), element_id :: String.t()) ::
-          map()
+  @doc """
+  Delete a chapter in a `Id3vx.Tag`.
+
+  Delete ToC element and chapter matching element ID.
+
+  Returns the updated container.
+  """
+  @spec delete_chapter(
+          container :: Tag.t() | Frame.Chapter.t(),
+          element_id :: String.t()
+        ) :: Tag.t() | Frame.Chapter.t()
   def delete_chapter(container, element_id) do
     # Remove ToC element child for chapter
     container =
