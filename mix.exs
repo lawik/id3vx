@@ -4,19 +4,23 @@ defmodule Id3vx.MixProject do
   def project do
     [
       app: :id3vx,
-      version: "0.1.0",
-      elixir: "~> 1.13",
+      version: "0.0.1-rc1",
+      elixir: "~> 1.12",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
 
       # Docs
       name: "Id3vx",
+      description: "Read and Write ID3 tags with Chapter support (ID3v2.3)",
       source_url: "https://github.com/changelog.com/id3vx",
       # homepage_url: "http://github.com/changelog.com/id3vx",
       docs: [
         # The main page in the docs
         main: "Id3vx",
         extras: ["README.md"]
+      ],
+      package: [
+        name: :id3vx
       ]
     ]
   end
