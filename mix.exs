@@ -12,7 +12,7 @@ defmodule Id3vx.MixProject do
       # Docs
       name: "Id3vx",
       description: "Read and Write ID3 tags with Chapter support (ID3v2.3)",
-      source_url: "https://github.com/changelog.com/id3vx",
+      source_url: "https://github.com/thechangelog/id3vx",
       docs: [
         # The main page in the docs
         main: "Id3vx",
@@ -21,7 +21,7 @@ defmodule Id3vx.MixProject do
       package: [
         name: :id3vx,
         licenses: ["MIT"],
-        links: %{"GitHub" => "https://github.com/changelog.com/id3vx"}
+        links: %{"GitHub" => "https://github.com/thechangelog/id3vx"}
       ]
     ]
   end
