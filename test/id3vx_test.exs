@@ -679,6 +679,16 @@ defmodule Id3vxTest do
            } = tag
   end
 
+  test "parse_file!/1 raises an error when parsing a non-mp3" do
+    assert_raise Id3vx.Error, fn ->
+      Id3vx.parse_file!(__ENV__.file)
+    end
+  end
+
+  test "parse_file/1 returns error tuple when parsing a non-mp3" do
+    assert {:error, %Id3vx.Error{}} = Id3vx.parse_file(__ENV__.file)
+  end
+
   test "Replace tag in mp3 file" do
     path = Path.join(@samples_path, "beamradio32.mp3")
     outpath = "/tmp/out.mp3"

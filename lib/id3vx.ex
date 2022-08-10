@@ -109,13 +109,13 @@ defmodule Id3vx do
   It will open the file read-only and only read as many bytes as
   necessary.
 
-  Returns `{:ok, Id3vx.Tag}` struct or throws an `{:error, Id3vx.Error}`.
+  Returns `{:ok, Id3vx.Tag}` struct or returns `{:error, Id3vx.Error}`.
   """
   @spec parse_file(path :: String.t()) :: {:ok, Tag.t()} | {:error, %Error{}}
   def parse_file(path) do
     try do
       {:ok, parse_file!(path)}
-    catch
+    rescue
       e -> {:error, e}
     end
   end
