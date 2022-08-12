@@ -740,4 +740,64 @@ defmodule Id3vxTest do
 
     assert 1 = Enum.count(out_tag.frames)
   end
+
+  test "Replace tag to mp3 file with ID3v2.2" do
+    path = Path.join(@samples_path, "test.mp3")
+    media = "pretend this is MPEG"
+    # tag should be 7 bytes in size for the word "filling"
+    tag = <<"ID3", 2::integer, 0::integer, 0::size(8), 7::size(32), "filling">>
+
+    File.write(path, tag <> media)
+    outpath = "/tmp/out.mp3"
+    assert {:error, %{context: :unsupported_tag}} = Id3vx.parse_file(path)
+
+    tag = %Tag{
+      version: 3,
+      revision: 0,
+      frames: [
+        %Frame{
+          data: %{encoding: :utf16, text: "New tag"},
+          id: "TIT1"
+        }
+      ]
+    }
+
+    assert :ok = Id3vx.replace_tag(tag, path, outpath)
+
+    # Check that the files still parse
+    assert {:error, %{context: :unsupported_tag}} = Id3vx.parse_file(path)
+    assert {:ok, out_tag} = Id3vx.parse_file(outpath)
+
+    assert 1 = Enum.count(out_tag.frames)
+  end
+
+  test "Replace tag to mp3 file with ID3v2.4" do
+    path = Path.join(@samples_path, "test.mp3")
+    media = "pretend this is MPEG"
+    # tag should be 7 bytes in size for the word "filling"
+    tag = <<"ID3", 4::integer, 0::integer, 0::size(8), 7::size(32), "filling">>
+
+    File.write(path, tag <> media)
+    outpath = "/tmp/out.mp3"
+    assert {:error, %{context: :unsupported_tag}} = Id3vx.parse_file(path)
+
+    tag = %Tag{
+      version: 3,
+      revision: 0,
+      frames: [
+        %Frame{
+          data: %{encoding: :utf16, text: "New tag"},
+          id: "TIT1"
+        }
+      ]
+    }
+
+    assert :ok = Id3vx.replace_tag(tag, path, outpath)
+
+    # Check that the files still parse
+    assert {:error, %{context: :unsupported_tag}} = Id3vx.parse_file(path)
+    assert {:ok, out_tag} = Id3vx.parse_file(outpath)
+
+    assert 1 = Enum.count(out_tag.frames)
+  end
 end

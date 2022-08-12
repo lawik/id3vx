@@ -831,7 +831,7 @@ defmodule Id3vx.Frame do
     }
   end
 
-  def parse(id, _tag, _flags, data) do
+  def parse(id, _tag, _flags, _data) do
     %Frame{
       id: id,
       label: "#{id} is not implemented, please contribute, it's not hard.",

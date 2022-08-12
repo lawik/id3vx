@@ -171,13 +171,16 @@ defmodule Id3vx do
       case parse_tag(tag_header) do
         {:ok, tag} ->
           _skip = IO.binread(indevice, tag.size)
-          IO.binwrite(outdevice, binary)
-          read_write(indevice, outdevice)
+
+        {:unsupported, %{tag_size: tag_size}} ->
+          _skip = IO.binread(indevice, tag_size)
 
         :not_found ->
-          IO.binwrite(outdevice, binary)
-          read_write(indevice, outdevice)
+          :noop
       end
+
+      IO.binwrite(outdevice, binary)
+      read_write(indevice, outdevice)
     catch
       e ->
         {:error, e}
@@ -194,8 +197,18 @@ defmodule Id3vx do
     {:ok, indevice} = File.open(infile_path, [:read, :binary])
     {:ok, outdevice} = File.open(outfile_path, [:write, :binary])
     tag_header = IO.binread(indevice, 10)
-    {:ok, tag} = parse_tag(tag_header)
-    _skip = IO.binread(indevice, tag.size)
+
+    case parse_tag(tag_header) do
+      {:ok, tag} ->
+        _skip = IO.binread(indevice, tag.size)
+
+      {:unsupported, %{tag_size: tag_size}} ->
+        _skip = IO.binread(indevice, tag_size)
+
+      :not_found ->
+        :noop
+    end
+
     IO.binwrite(outdevice, binary)
     read_write(indevice, outdevice)
   end
@@ -310,6 +323,9 @@ defmodule Id3vx do
       {:ok, tag} ->
         {:parse_frames, source, tag}
 
+      {:unsupported, _} ->
+        throw(%Error{message: "Unsupported tag found", context: :unsupported_tag})
+
       :not_found ->
         throw(%Error{message: "Tag not found", context: :parse_prepend_tag})
     end
@@ -382,12 +398,22 @@ defmodule Id3vx do
   end
 
   defp parse_tag(
+         <<"ID3", 2::integer, _minor::integer, _flags::size(8), tag_size::binary-size(4)>>
+       ) do
+    tag_size = Utils.decode_synchsafe_integer(tag_size)
+
+    {:unsupported, %{tag_size: tag_size}}
+  end
+
+  defp parse_tag(
          <<"ID3", 4::integer, minor::integer, unsynchronisation::size(1),
            extended_header::size(1), experimental::size(1), footer::size(1), _unused::size(4),
            tag_size::binary-size(4)>>
        ) do
     if true do
-      throw(%Error{message: "ID3v2.4 is not currently supported. Contributions are welcome."})
+      tag_size = Utils.decode_synchsafe_integer(tag_size)
+
+      {:unsupported, %{tag_size: tag_size}}
     else
       # Started implementation of version: 4
       flags = %TagFlags{
