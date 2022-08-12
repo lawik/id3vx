@@ -114,9 +114,19 @@ defmodule Id3vx do
   @spec parse_file(path :: String.t()) :: {:ok, Tag.t()} | {:error, %Error{}}
   def parse_file(path) do
     try do
-      {:ok, parse_file!(path)}
+      case File.open(path, [:read, :binary]) do
+        {:ok, device} ->
+          {:ok, parse_io(device)}
+
+        {:error, e} ->
+          throw(%Error{
+            message: "Could not load file '#{inspect(path)}', error: #{inspect(e)}",
+            context: {:file_open, e}
+          })
+      end
     catch
-      e -> {:error, e}
+      e ->
+        {:error, e}
     end
   end
 
@@ -140,7 +150,7 @@ defmodule Id3vx do
   """
   def parse_binary(binary) do
     try do
-      {:ok, parse_binary!(binary)}
+      {:ok, parse({<<>>, binary})}
     catch
       e -> {:error, e}
     end
@@ -153,9 +163,24 @@ defmodule Id3vx do
   """
   def replace_tag(%Tag{} = tag, infile_path, outfile_path) do
     try do
-      replace_tag!(tag, infile_path, outfile_path)
+      binary = encode_tag(tag)
+      {:ok, indevice} = File.open(infile_path, [:read, :binary])
+      {:ok, outdevice} = File.open(outfile_path, [:write, :binary])
+      tag_header = IO.binread(indevice, 10)
+
+      case parse_tag(tag_header) do
+        {:ok, tag} ->
+          _skip = IO.binread(indevice, tag.size)
+          IO.binwrite(outdevice, binary)
+          read_write(indevice, outdevice)
+
+        :not_found ->
+          IO.binwrite(outdevice, binary)
+          read_write(indevice, outdevice)
+      end
     catch
-      e -> {:error, e}
+      e ->
+        {:error, e}
     end
   end
 

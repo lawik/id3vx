@@ -681,7 +681,7 @@ defmodule Id3vxTest do
 
   test "Replace tag in mp3 file" do
     path = Path.join(@samples_path, "beamradio32.mp3")
-    outpath = "/tmp/out.mp3"
+    outpath = "/tmp/out-beam.mp3"
     assert {:ok, tag} = Id3vx.parse_file(path)
     original_tag_size = tag.size + 10
 
@@ -713,5 +713,31 @@ defmodule Id3vxTest do
 
     # Confirm size difference
     assert in_stat.size - size_diff == out_stat.size
+  end
+
+  test "Add tag to mp3 file" do
+    path = Path.join(@samples_path, "test.mp3")
+    File.write(path, "pretend this is MPEG")
+    outpath = "/tmp/out.mp3"
+    assert {:error, %{context: :parse_prepend_tag}} = Id3vx.parse_file(path)
+
+    tag = %Tag{
+      version: 3,
+      revision: 0,
+      frames: [
+        %Frame{
+          data: %{encoding: :utf16, text: "New tag"},
+          id: "TIT1"
+        }
+      ]
+    }
+
+    assert :ok = Id3vx.replace_tag(tag, path, outpath)
+
+    # Check that the files still parse
+    assert {:error, %{context: :parse_prepend_tag}} = Id3vx.parse_file(path)
+    assert {:ok, out_tag} = Id3vx.parse_file(outpath)
+
+    assert 1 = Enum.count(out_tag.frames)
   end
 end
