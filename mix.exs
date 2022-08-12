@@ -4,7 +4,7 @@ defmodule Id3vx.MixProject do
   def project do
     [
       app: :id3vx,
-      version: "0.0.1-rc1",
+      version: "0.0.1-rc2",
       elixir: "~> 1.12",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
