@@ -385,6 +385,7 @@ defmodule Id3vx.EncodingTest do
 
     binary = Frame.encode_frame(frame, %Tag{version: 3})
     assert <<frame_header::binary-size(10), frame_data::binary>> = binary
+
     assert <<"PRIV", frame_size::size(32), _flags::binary-size(2)>> = frame_header
     assert 19 == frame_size
 
@@ -457,5 +458,20 @@ defmodule Id3vx.EncodingTest do
     assert 4 == frame_size
     counter = :binary.decode_unsigned(frame_data)
     assert counter == frame.data.counter
+  end
+
+  test "v2.3 encoding MCDI frame" do
+    frame = %Frame{
+      id: "MCDI",
+      flags: %FrameFlags{},
+      data: %Frame.MusicCDIdentifier{
+        cd_toc_binary: "foo bar baz"
+      }
+    }
+
+    binary = Frame.encode_frame(frame, %Tag{version: 3})
+    assert <<frame_header::binary-size(10), _frame_data::binary>> = binary
+    assert <<"MCDI", frame_size::size(32), _flags::binary-size(2)>> = frame_header
+    assert 11 == frame_size
   end
 end
