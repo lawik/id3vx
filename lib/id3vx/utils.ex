@@ -5,7 +5,7 @@ defmodule Id3vx.Utils do
   alias Id3vx.Error
 
   def pad_to_byte_size(not_binary, size) when not is_binary(not_binary) do
-    pad_to_byte_size(<<not_binary>>, size)
+    pad_to_byte_size(:binary.encode_unsigned(not_binary, :big), size)
   end
 
   def pad_to_byte_size(binary, size) do
@@ -61,8 +61,14 @@ defmodule Id3vx.Utils do
         {IO.iodata_to_binary(processed), desynched?, padded?}
 
       # False synchronisation
-      <<0xFF::8, 1::3, rem::5, rest::binary>> ->
-        unsynchronise_if_needed(rest, true, [processed, <<0xFF::8, 0::8, 1::3, rem::5>>])
+      <<0xFF::8, 1::1, 1::1, 1::1, _::5, rest::binary>> = full ->
+        # Grab byte with the leading 1's
+        <<_::8, rem::8, _::binary>> = full
+        unsynchronise_if_needed(rest, true, [processed, <<0xFF, 0x00, rem>>])
+
+      # Avoiding misguiding
+      <<0xFF::8, 0x00::8, rest::binary>> ->
+        unsynchronise_if_needed(rest, true, [processed, <<0xFF, 0x00, 0x00>>])
 
       <<checked::8, rest::binary>> ->
         # Step one byte forward please
@@ -73,45 +79,25 @@ defmodule Id3vx.Utils do
   def decode_unsynchronized(data, decoded \\ <<>>)
 
   # Candidate for decoding
-  def decode_unsynchronized(<<0xFF::8, 0x00::8, _::binary>> = data, decoded) do
-    if byte_size(data) < 3 do
-      # Can't be false sync
-      decoded <> data
-    else
-      {sample, remainder} =
-        case data do
-          <<sample::binary-size(3)>> -> {sample, <<>>}
-          <<sample::binary-size(3), rest::binary>> -> {sample, rest}
-          sample -> {sample, <<>>}
-        end
-
-      <<0xFF::8, 0x00::8, third::8>> = sample
-
-      fixed =
-        case <<third::8>> do
-          <<1::3, bits::5>> ->
-            <<0xFF, 1::3, bits::5>>
-
-          <<0::8>> ->
-            <<0xFF, 0x00>>
-
-          <<any::8>> ->
-            <<0xFF, 0x00, any>>
-        end
-
-      decoded = decoded <> fixed
-
-      if byte_size(remainder) == 0 do
-        decoded
-      else
-        decode_unsynchronized(remainder, decoded)
-      end
-    end
+  def decode_unsynchronized(<<0xFF, 0x00, 1::1, 1::1, 1::1, _::5, rest::binary>> = data, decoded) do
+    <<_::16, third::8, _::binary>> = data
+    decoded = decoded <> <<0xFF, third>>
+    decode_unsynchronized(rest, decoded)
   end
 
-  # Final byte
-  def decode_unsynchronized(<<byte::8>>, decoded) do
-    decoded <> <<byte>>
+  # Accident-avoider
+  def decode_unsynchronized(<<0xFF, 0x00, 0x00, rest::binary>>, decoded) do
+    decoded = decoded <> <<0xFF, 0x00>>
+    decode_unsynchronized(rest, decoded)
+  end
+
+  # End bytes corner case
+  def decode_unsynchronized(<<0xFF, 0x00>>, decoded) do
+    decoded <> <<0xFF>>
+  end
+
+  def decode_unsynchronized(<<>>, decoded) do
+    decoded
   end
 
   # No match, move one byte forward

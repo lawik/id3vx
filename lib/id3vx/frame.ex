@@ -386,6 +386,7 @@ defmodule Id3vx.Frame do
     frame_binary = [<<encoding_byte>>, encoded_text]
     frame_size = IO.iodata_length(frame_binary)
     header = encode_header(frame, frame_size, tag)
+
     IO.iodata_to_binary([header, frame_binary])
   end
 
@@ -400,6 +401,7 @@ defmodule Id3vx.Frame do
 
     encoding_byte = get_encoding_byte(encoding)
     null_byte = get_null_byte(encoding)
+    image_description = convert_string(encoding, description)
 
     picture_type =
       @picture_type
@@ -411,7 +413,7 @@ defmodule Id3vx.Frame do
       mime_type,
       <<0>>,
       picture_type,
-      description,
+      image_description,
       null_byte,
       image_data
     ]

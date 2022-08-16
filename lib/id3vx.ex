@@ -18,7 +18,7 @@ defmodule Id3vx do
       iex> Id3vx.Tag.create(3)
       ...> |> Id3vx.Tag.add_text_frame("TIT1", "Title!")
       ...> |> Id3vx.encode_tag()
-      <<73, 68, 51, 3, 0, 0, 0, 0, 0, 27, 84, 73, 84, 49, 0, 0, 0, 17, 0, 0, 1, 254, 255, 0, 84, 0, 105, 0, 116, 0, 108, 0, 101, 0, 33, 0, 0>>
+      <<73, 68, 51, 3, 0, 128, 0, 0, 0, 28, 84, 73, 84, 49, 0, 0, 0, 17, 0, 0, 1, 254, 255, 0, 0, 84, 0, 105, 0, 116, 0, 108, 0, 101, 0, 33, 0, 0>>
 
   ### Parse from binary
 
@@ -251,7 +251,6 @@ defmodule Id3vx do
   @spec encode_tag(tag :: Tag.t()) :: binary()
   def encode_tag(%Tag{version: 3} = tag) do
     frames = encode_frames(tag)
-
     {frames, desynched?, _padded?} = Utils.unsynchronise_if_needed(frames)
 
     tag_flags =
@@ -290,7 +289,8 @@ defmodule Id3vx do
       try do
         acc <> Frame.encode_frame(frame, tag)
       catch
-        :discard_frame -> acc
+        :discard_frame ->
+          acc
       end
     end)
   end
