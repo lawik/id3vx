@@ -5,6 +5,30 @@ defmodule Id3vx.UnsynchronisationTest do
   alias Id3vx.Frame
   alias Id3vx.FrameFlags
   alias Id3vx.TagFlags
+  alias Id3vx.Utils
+
+  describe "unsynchronisation utility" do
+    test "is needed" do
+      binary = <<0xFF, 0xFF>>
+      assert {<<0xFF, 0x00, 0xFF>> = unsynched, true, _} = Utils.unsynchronise_if_needed(binary)
+      assert binary == Utils.decode_unsynchronized(unsynched)
+    end
+
+    test "is corner-case" do
+      binary = <<0x00, 0xFF>>
+      assert {<<0x00, 0xFF, 0x00>> = unsynched, true, _} = Utils.unsynchronise_if_needed(binary)
+      assert binary == Utils.decode_unsynchronized(unsynched)
+    end
+
+    test "multiple" do
+      binary = <<0xFF, 0xFE, 0x00, 0x00, 0xAA, 0xFF, 0xFF>>
+
+      assert {<<0xFF, 0x00, 0xFE, 0x00, 0x00, 0xAA, 0xFF, 0x00, 0xFF>> = unsynched, true, _} =
+               Utils.unsynchronise_if_needed(binary)
+
+      assert binary == Utils.decode_unsynchronized(unsynched)
+    end
+  end
 
   test "v2.3 unsynchronisation required" do
     tag = %Tag{
@@ -21,7 +45,7 @@ defmodule Id3vx.UnsynchronisationTest do
             description: "image",
             mime_type: "image/jpg",
             picture_type: :other,
-            image_data: <<0xFF::8, 1::3, 0::5>>
+            image_data: <<0xFF::8, 0xFF::88>>
           }
         }
       ]
@@ -47,7 +71,7 @@ defmodule Id3vx.UnsynchronisationTest do
             description: "image",
             mime_type: "image/jpg",
             picture_type: :other,
-            image_data: <<0xFE::8, 1::3, 0::5>>
+            image_data: <<0xFE::8, 0xFE::8>>
           }
         }
       ]

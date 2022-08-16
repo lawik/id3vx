@@ -34,9 +34,9 @@ defmodule Id3vx.EncodingTest do
     binary = Id3vx.encode_tag(tag)
 
     assert <<tag_header::binary-size(10), tag_rest::binary>> = binary
-    assert <<"ID3", 3::integer, 0::integer, 0::size(8), tag_size::binary-size(4)>> = tag_header
+    assert <<"ID3", 3::integer, 0::integer, 128::size(8), tag_size::binary-size(4)>> = tag_header
     tag_size = Id3vx.Utils.decode_synchsafe_integer(tag_size)
-    assert 31 == tag_size
+    assert 32 == tag_size
 
     assert <<"TIT2", frame_size::size(32), _flags::binary-size(2), frames_data::binary>> =
              tag_rest
@@ -44,7 +44,7 @@ defmodule Id3vx.EncodingTest do
     assert 21 == frame_size
 
     assert <<0x01::size(8), frame_text::binary>> = frames_data
-    assert encoded_text == frame_text
+    assert encoded_text == Id3vx.Utils.decode_unsynchronized(frame_text)
   end
 
   test "encoding synchsafe numbers" do
