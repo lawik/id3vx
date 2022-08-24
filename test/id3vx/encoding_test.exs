@@ -625,6 +625,7 @@ defmodule Id3vx.EncodingTest do
 
     binary = Frame.encode_frame(frame, %Tag{version: 3})
     assert <<frame_header::binary-size(10), frame_data::binary>> = binary
+
     assert <<"RVRB", frame_size::size(32), _flags::binary-size(2)>> = frame_header
     assert 12 == frame_size
 
@@ -654,5 +655,42 @@ defmodule Id3vx.EncodingTest do
 
     assert premix_left_to_right == frame.data.premix_left_to_right
     assert premix_right_to_left == frame.data.premix_right_to_left
+  end
+
+  test "v2.3 encoding USLT frame", c do
+    frame = %Frame{
+      id: "USLT",
+      flags: %FrameFlags{},
+      data: %Frame.UnsynchronisedLyricsText{
+        encoding: :utf16,
+        language: "eng",
+        content_descriptor: "foobar",
+        lyrics_text: "a lyrics about foobarbaz"
+      }
+    }
+
+    binary = Frame.encode_frame(frame, %Tag{version: 3})
+    assert <<frame_header::binary-size(10), frame_data::binary>> = binary
+
+    assert <<"USLT", frame_size::size(32), _flags::binary-size(2)>> = frame_header
+    assert 70 == frame_size
+    assert <<0x01::size(8), frame_rest::binary>> = frame_data
+
+    assert <<"eng", frame_rest::binary>> = frame_rest
+
+    [content_descriptor, lyrics_text] = :binary.split(frame_rest, <<0, 0>>)
+
+    assert content_descriptor == "\xFE\xFF\0f\0o\0o\0b\0a\0r"
+
+    assert lyrics_text ==
+             "\xFE\xFF\0a\0 \0l\0y\0r\0i\0c\0s\0 \0a\0b\0o\0u\0t\0 \0f\0o\0o\0b\0a\0r\0b\0a\0z"
+
+    tag = Id3vx.Tag.create(3)
+    tag = %{tag | frames: [frame]}
+    path = scratch(c, tag)
+    assert {:ok, _t} = Id3vx.parse_file(path)
+
+    assert id3v2(path) =~ "USLT"
+    assert ffmpeg(path) =~ "a lyrics about foobarbaz"
   end
 end
