@@ -205,6 +205,31 @@ defmodule Id3vx.Frame do
           | :non_musical_merchandise
   def recieved_as_types, do: @recieved_as_type
 
+  @content_type %{
+    0x0 => :other,
+    0x1 => :lyrics,
+    0x2 => :text_transcription,
+    0x3 => :movement,
+    0x4 => :events,
+    0x5 => :chord,
+    0x6 => :trivia,
+    0x7 => :webpages_url,
+    0x8 => :images_url
+  }
+
+  @type content_type ::
+          :other
+          | :lyrics
+          | :text_transcription
+          | :movement
+          | :events
+          | :chord
+          | :trivia
+          | :webpages_url
+          | :images_url
+
+  def content_types, do: @content_type
+
   @spec encode_frame(Frame.t(), Id3vx.Tag.t()) :: binary()
   def encode_frame(frame, tag)
 
@@ -674,6 +699,33 @@ defmodule Id3vx.Frame do
     IO.iodata_to_binary([header, frame_binary])
   end
 
+  def encode_frame(%Frame{id: "USLT"} = frame, %{version: 3} = tag) do
+    %Frame.UnsynchronisedLyricsText{
+      encoding: encoding,
+      language: language,
+      content_descriptor: content_descriptor,
+      lyrics_text: lyrics_text
+    } = frame.data
+
+    null_byte = get_null_byte(encoding)
+    encoding_byte = get_encoding_byte(encoding)
+
+    content_descriptor = encode_string(encoding, content_descriptor)
+    lyrics_text = encode_string(encoding, lyrics_text)
+
+    frame_binary = [
+      <<encoding_byte>>,
+      language,
+      content_descriptor,
+      null_byte,
+      lyrics_text
+    ]
+
+    frame_size = IO.iodata_length(frame_binary)
+    header = encode_header(frame, frame_size, tag)
+    IO.iodata_to_binary([header, frame_binary])
+  end
+
   def encode_frame(%Frame{raw_data: raw} = frame, tag) do
     if frame.flags.tag_alter_preservation do
       # According to spec, discard unknown frame if flag is set for it and tag is modified
@@ -1040,6 +1092,25 @@ defmodule Id3vx.Frame do
         feedback_right_to_left: feedback_right_to_left,
         premix_left_to_right: premix_left_to_right,
         premix_right_to_left: premix_right_to_left
+      }
+    }
+  end
+
+  def parse("USLT" = id, _tag, _flags, data) do
+    <<encoding::size(8), language::binary-size(3), data::binary>> = data
+    encoding = @text_encoding[encoding]
+    {content_descriptor, rest} = split_at_null(encoding, data)
+    content_descriptor = decode_string(encoding, content_descriptor)
+
+    lyrics_text = decode_string(encoding, rest)
+
+    %Frame{
+      id: id,
+      data: %Frame.UnsynchronisedLyricsText{
+        encoding: encoding,
+        language: language,
+        content_descriptor: content_descriptor,
+        lyrics_text: lyrics_text
       }
     }
   end
