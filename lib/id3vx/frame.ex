@@ -654,6 +654,26 @@ defmodule Id3vx.Frame do
     IO.iodata_to_binary([header, frame_binary])
   end
 
+  def encode_frame(%Frame{id: "SEEK"} = frame, %{version: 3} = tag) do
+    %{
+      offset: offset
+    } = frame.data
+
+    # byte size of counter
+    offset_binary_size = offset |> :binary.encode_unsigned() |> byte_size()
+
+    # use minimum 32 bits
+    offset_size = max(offset_binary_size * 8, 32)
+
+    binary = <<offset::size(offset_size)>>
+
+    frame_binary = [binary]
+
+    frame_size = IO.iodata_length(frame_binary)
+    header = encode_header(frame, frame_size, tag)
+    IO.iodata_to_binary([header, frame_binary])
+  end
+
   def encode_frame(%Frame{raw_data: raw} = frame, tag) do
     if frame.flags.tag_alter_preservation do
       # According to spec, discard unknown frame if flag is set for it and tag is modified
@@ -998,6 +1018,17 @@ defmodule Id3vx.Frame do
         description: description,
         picture_mime: picture_mime,
         logo: logo
+      }
+    }
+  end
+
+  def parse("SEEK" = id, _tag, _flags, data) do
+    offset = :binary.decode_unsigned(data)
+
+    %Frame{
+      id: id,
+      data: %Frame.Seek{
+        offset: offset
       }
     }
   end
