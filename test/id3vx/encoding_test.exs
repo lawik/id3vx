@@ -533,4 +533,55 @@ defmodule Id3vx.EncodingTest do
     [contact_url, _rest] = :binary.split(frame_rest, <<0>>)
     assert contact_url == frame.data.contact_url
   end
+
+  test "v2.3 encoding of RVRB frame" do
+    frame = %Frame{
+      id: "RVRB",
+      flags: %FrameFlags{},
+      data: %Frame.Reverb{
+        reverb_left: 32,
+        reverb_right: 32,
+        bounces_left: 3,
+        bounces_right: 3,
+        feedback_left_to_left: 50,
+        feedback_left_to_right: 50,
+        feedback_right_to_right: 50,
+        feedback_right_to_left: 50,
+        premix_left_to_right: 27,
+        premix_right_to_left: 27
+      }
+    }
+
+    binary = Frame.encode_frame(frame, %Tag{version: 3})
+    assert <<frame_header::binary-size(10), frame_data::binary>> = binary
+    assert <<"RVRB", frame_size::size(32), _flags::binary-size(2)>> = frame_header
+    assert 12 == frame_size
+
+    assert <<reverb_left::size(16), reverb_right::size(16), frame_rest::binary>> = frame_data
+
+    assert reverb_left == frame.data.reverb_left
+    assert reverb_right == frame.data.reverb_right
+
+    assert <<bounces_left::size(8), bounces_right::size(8), frame_rest::binary>> = frame_rest
+    assert bounces_left == frame.data.bounces_left
+    assert bounces_right == frame.data.bounces_right
+
+    assert <<feedback_left_to_left::size(8), feedback_left_to_right::size(8), frame_rest::binary>> =
+             frame_rest
+
+    assert feedback_left_to_left == frame.data.feedback_left_to_left
+    assert feedback_left_to_right == frame.data.feedback_left_to_right
+
+    assert <<feedback_right_to_right::size(8), feedback_right_to_left::size(8),
+             frame_rest::binary>> = frame_rest
+
+    assert feedback_right_to_right == frame.data.feedback_right_to_right
+    assert feedback_right_to_left == frame.data.feedback_right_to_left
+
+    assert <<premix_left_to_right::size(8), premix_right_to_left::size(8), _frame_rest::binary>> =
+             frame_rest
+
+    assert premix_left_to_right == frame.data.premix_left_to_right
+    assert premix_right_to_left == frame.data.premix_right_to_left
+  end
 end
