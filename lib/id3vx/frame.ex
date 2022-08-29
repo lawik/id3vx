@@ -641,6 +641,38 @@ defmodule Id3vx.Frame do
     IO.iodata_to_binary([header, frame_binary])
   end
 
+  def encode_frame(%Frame{id: "RVRB"} = frame, %{version: 3} = tag) do
+    %Frame.Reverb{
+      reverb_left: reverb_left,
+      reverb_right: reverb_right,
+      bounces_left: bounces_left,
+      bounces_right: bounces_right,
+      feedback_left_to_left: feedback_left_to_left,
+      feedback_left_to_right: feedback_left_to_right,
+      feedback_right_to_right: feedback_right_to_right,
+      feedback_right_to_left: feedback_right_to_left,
+      premix_left_to_right: premix_left_to_right,
+      premix_right_to_left: premix_right_to_left
+    } = frame.data
+
+    frame_binary = [
+      <<reverb_left::16>>,
+      <<reverb_right::16>>,
+      <<bounces_left::8>>,
+      <<bounces_right::8>>,
+      <<feedback_left_to_left::8>>,
+      <<feedback_left_to_right::8>>,
+      <<feedback_right_to_right::8>>,
+      <<feedback_right_to_left::8>>,
+      <<premix_left_to_right::8>>,
+      <<premix_right_to_left::8>>
+    ]
+
+    frame_size = IO.iodata_length(frame_binary)
+    header = encode_header(frame, frame_size, tag)
+    IO.iodata_to_binary([header, frame_binary])
+  end
+
   def encode_frame(%Frame{raw_data: raw} = frame, tag) do
     if frame.flags.tag_alter_preservation do
       # According to spec, discard unknown frame if flag is set for it and tag is modified
@@ -984,6 +1016,29 @@ defmodule Id3vx.Frame do
         description: description,
         picture_mime: picture_mime,
         logo: logo
+      }
+    }
+  end
+
+  def parse("RVRB" = id, _tag, _flags, data) do
+    <<reverb_left::size(16), reverb_right::size(16), bounces_left::size(8),
+      bounces_right::size(8), feedback_left_to_left::size(8), feedback_left_to_right::size(8),
+      feedback_right_to_right::size(8), feedback_right_to_left::size(8),
+      premix_left_to_right::size(8), premix_right_to_left::size(8)>> = data
+
+    %Frame{
+      id: id,
+      data: %Frame.Reverb{
+        reverb_left: reverb_left,
+        reverb_right: reverb_right,
+        bounces_left: bounces_left,
+        bounces_right: bounces_right,
+        feedback_left_to_left: feedback_left_to_left,
+        feedback_left_to_right: feedback_left_to_right,
+        feedback_right_to_right: feedback_right_to_right,
+        feedback_right_to_left: feedback_right_to_left,
+        premix_left_to_right: premix_left_to_right,
+        premix_right_to_left: premix_right_to_left
       }
     }
   end
