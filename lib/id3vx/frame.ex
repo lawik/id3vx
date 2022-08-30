@@ -401,7 +401,7 @@ defmodule Id3vx.Frame do
 
     encoding_byte = get_encoding_byte(encoding)
     null_byte = get_null_byte(encoding)
-    image_description = convert_string(encoding, description)
+    image_description = convert_string(encoding, description, true)
 
     picture_type =
       @picture_type
@@ -461,8 +461,8 @@ defmodule Id3vx.Frame do
     encoding_byte = get_encoding_byte(encoding)
     null_byte = get_null_byte(encoding)
 
-    content_description = convert_string(encoding, content_description)
-    content_text = convert_string(encoding, content_text)
+    content_description = convert_string(encoding, content_description, true)
+    content_text = convert_string(encoding, content_text, true)
 
     frame_binary = [<<encoding_byte>>, language, content_description, null_byte, content_text]
 
@@ -481,7 +481,7 @@ defmodule Id3vx.Frame do
     encoding_byte = get_encoding_byte(encoding)
     null_byte = get_null_byte(encoding)
     url = convert_string(:iso8859_1, url)
-    description = convert_string(encoding, description)
+    description = convert_string(encoding, description, true)
     frame_binary = [<<encoding_byte>>, description, null_byte, url]
 
     frame_size = IO.iodata_length(frame_binary)
@@ -629,8 +629,8 @@ defmodule Id3vx.Frame do
       |> Utils.flip_map()
       |> Map.get(recieved_as)
 
-    seller_name = convert_string(encoding, seller_name)
-    description = convert_string(encoding, description)
+    seller_name = convert_string(encoding, seller_name, true)
+    description = convert_string(encoding, description, true)
 
     frame_binary = [
       <<encoding_byte>>,
@@ -780,11 +780,11 @@ defmodule Id3vx.Frame do
 
     %Frame{
       id: id,
-      data: %{
+      data: %Frame.Comment{
         encoding: encoding,
         language: language,
-        description: description,
-        text: text
+        content_description: description,
+        content_text: text
       }
     }
   end
@@ -1237,18 +1237,32 @@ defmodule Id3vx.Frame do
     end
   end
 
-  defp convert_string(encoding, str) when encoding in [:iso8859_1, :utf8] do
+  defp convert_string(encoding, str, add_bom? \\ false)
+
+  defp convert_string(encoding, str, _) when encoding in [:iso8859_1, :utf8] do
     str
   end
 
-  defp convert_string(:utf16, data) do
+  defp convert_string(:utf16, data, add_bom?) do
     {encoding, bom_length} = :unicode.bom_to_encoding(data)
+
     {_, string_data} = String.split_at(data, bom_length)
-    :unicode.characters_to_binary(string_data, encoding)
+
+    if add_bom? do
+      bom = :unicode.encoding_to_bom(:utf16)
+      bom <> :unicode.characters_to_binary(string_data, encoding)
+    else
+      :unicode.characters_to_binary(string_data, encoding)
+    end
   end
 
-  defp convert_string(:utf16be, data) do
-    :unicode.characters_to_binary(data, {:utf16, :big})
+  defp convert_string(:utf16be, data, add_bom?) do
+    if add_bom? do
+      bom = :unicode.encoding_to_bom({:utf16, :big})
+      bom <> :unicode.characters_to_binary(data, {:utf16, :big})
+    else
+      :unicode.characters_to_binary(data, {:utf16, :big})
+    end
   end
 
   defp get_double_null_terminated(data, max_byte_size, acc \\ [])
