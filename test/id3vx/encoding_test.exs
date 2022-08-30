@@ -51,7 +51,7 @@ defmodule Id3vx.EncodingTest do
 
     encoded_string = :unicode.characters_to_binary("My Title", :utf8, {:utf16, :big})
 
-    encoded_text = :unicode.encoding_to_bom({:utf16, :big}) <> encoded_string <> <<0x00, 0x00>>
+    _encoded_text = :unicode.encoding_to_bom({:utf16, :big}) <> encoded_string <> <<0x00, 0x00>>
     binary = Id3vx.encode_tag(tag)
 
     assert <<tag_header::binary-size(10), tag_rest::binary>> = binary
@@ -64,7 +64,7 @@ defmodule Id3vx.EncodingTest do
 
     assert 19 == frame_size
 
-    assert <<0x01::size(8), frame_text::binary>> = frames_data
+    assert <<0x01::size(8), _frame_text::binary>> = frames_data
 
     path = scratch(c, tag)
     assert id3v2(path) =~ "My Title"
@@ -178,7 +178,7 @@ defmodule Id3vx.EncodingTest do
     encoded_string2 = :unicode.characters_to_binary("Title2", :utf8, {:utf16, :big})
 
     encoded_text1 = :unicode.encoding_to_bom({:utf16, :big}) <> encoded_string1 <> <<0x00, 0x00>>
-    encoded_text2 = :unicode.encoding_to_bom({:utf16, :big}) <> encoded_string2 <> <<0x00, 0x00>>
+    _encoded_text2 = :unicode.encoding_to_bom({:utf16, :big}) <> encoded_string2 <> <<0x00, 0x00>>
 
     assert <<frame_header::binary-size(10), frame_data::binary>> = binary
     assert <<"CHAP", frame_size::size(32), _flags::binary-size(2)>> = frame_header
@@ -211,7 +211,7 @@ defmodule Id3vx.EncodingTest do
     tag = Id3vx.Tag.create(3)
     tag = %{tag | frames: [frame]}
     path = scratch(c, tag)
-    assert {:ok, t} = Id3vx.parse_file(path)
+    assert {:ok, _t} = Id3vx.parse_file(path)
     assert id3v2(path) =~ "CHAP"
     assert ffmpeg(path) =~ "Title1"
   end
@@ -603,5 +603,31 @@ defmodule Id3vx.EncodingTest do
 
     [contact_url, _rest] = :binary.split(frame_rest, <<0>>)
     assert contact_url == frame.data.contact_url
+  end
+
+  test "v2.3 encoding IPLS frame", c do
+    frame = %Frame{
+      id: "IPLS",
+      flags: %FrameFlags{},
+      data: %Frame.InvolvedPeopleList{
+        encoding: :utf16,
+        people_list_strings: "Producer Bob Artist John"
+      }
+    }
+
+    binary = Frame.encode_frame(frame, %Tag{version: 3})
+    assert <<frame_header::binary-size(10), frame_data::binary>> = binary
+    assert <<"IPLS", frame_size::size(32), _flags::binary-size(2)>> = frame_header
+    assert 51 == frame_size
+    assert <<0x01::size(8), people_list_strings::binary>> = frame_data
+
+    assert people_list_strings ==
+             "\xFE\xFF\0P\0r\0o\0d\0u\0c\0e\0r\0 \0B\0o\0b\0 \0A\0r\0t\0i\0s\0t\0 \0J\0o\0h\0n"
+
+    tag = Id3vx.Tag.create(3)
+    tag = %{tag | frames: [frame]}
+    path = scratch(c, tag)
+    assert {:ok, _t} = Id3vx.parse_file(path)
+    assert id3v2(path) =~ "IPLS"
   end
 end

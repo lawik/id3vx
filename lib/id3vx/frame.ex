@@ -42,7 +42,7 @@ defmodule Id3vx.Frame do
     TENC Encoded by
     TEXT Lyricist/Text writer
     TFLT File type
-    TIPL Involved people list
+    IPLS Involved people list
     TIT1 Content group description
     TIT2 Title/songname/content description
     TIT3 Subtitle/Description refinement
@@ -641,6 +641,20 @@ defmodule Id3vx.Frame do
     IO.iodata_to_binary([header, frame_binary])
   end
 
+  def encode_frame(%Frame{id: "IPLS"} = frame, %{version: 3} = tag) do
+    %Frame.InvolvedPeopleList{
+      encoding: encoding,
+      people_list_strings: people_list_strings
+    } = frame.data
+
+    encoding_byte = get_encoding_byte(encoding)
+    people_list_strings = encode_string(encoding, people_list_strings)
+    frame_binary = [<<encoding_byte>>, people_list_strings]
+    frame_size = IO.iodata_length(frame_binary)
+    header = encode_header(frame, frame_size, tag)
+    IO.iodata_to_binary([header, frame_binary])
+  end
+
   def encode_frame(%Frame{raw_data: raw} = frame, tag) do
     if frame.flags.tag_alter_preservation do
       # According to spec, discard unknown frame if flag is set for it and tag is modified
@@ -984,6 +998,19 @@ defmodule Id3vx.Frame do
         description: description,
         picture_mime: picture_mime,
         logo: logo
+      }
+    }
+  end
+
+  def parse("IPLS" = id, _tag, _flags, data) do
+    <<encoding::size(8), people_list_strings::binary>> = data
+    encoding = @text_encoding[encoding]
+
+    %Frame{
+      id: id,
+      data: %Frame.InvolvedPeopleList{
+        encoding: encoding,
+        people_list_strings: people_list_strings
       }
     }
   end
