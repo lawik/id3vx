@@ -6,6 +6,16 @@ defmodule Id3vxTest do
   alias Id3vx.Frame
   alias Id3vx.Frame.Unknown
 
+  defp id3v2(path) do
+    assert {output, 0} = System.cmd("id3v2", ["--list", path])
+    output
+  end
+
+  defp ffmpeg(path) do
+    {result, _} = System.shell("ffmpeg -hide_banner -i #{path} 2>&1")
+    result
+  end
+
   @samples_path "test/samples"
   setup_all do
     File.mkdir_p!(@samples_path)
@@ -37,12 +47,6 @@ defmodule Id3vxTest do
     for path <- ok_files do
       binary = File.read!(path)
       assert {:ok, tag} = Id3vx.parse_binary(binary)
-
-      # TODO: Re-enable these tests when we support encoding and parsing
-      #       for the same set of frames
-      # tag_binary = Id3vx.get_tag_binary(binary)
-      # encoded_tag = Id3vx.encode_tag(tag)
-      # assert tag_binary == encoded_tag
 
       for frame <- tag.frames do
         case frame.data do
@@ -86,10 +90,10 @@ defmodule Id3vxTest do
                },
                %Frame{
                  data: %{
-                   description: "",
+                   content_description: "",
                    encoding: :utf16,
                    language: "eng",
-                   text: "Why run copper wires through your walls when you can run fiber?"
+                   content_text: "Why run copper wires through your walls when you can run fiber?"
                  },
                  id: "COMM",
                  label: "Comments"
@@ -679,6 +683,15 @@ defmodule Id3vxTest do
            } = tag
   end
 
+  test "ATP chapter encodes ok" do
+    inpath = Path.join(@samples_path, "atp483.mp3")
+    assert {:ok, tag} = Id3vx.parse_file(inpath)
+    outpath = Path.join(@samples_path, "atp-re-encode.mp3")
+    assert Id3vx.replace_tag!(tag, inpath, outpath)
+    assert id3v2(outpath) =~ "CHAP"
+    assert ffmpeg(outpath) =~ "CHAP"
+  end
+
   test "Replace tag in mp3 file" do
     path = Path.join(@samples_path, "beamradio32.mp3")
     outpath = "/tmp/out-beam.mp3"
@@ -799,5 +812,41 @@ defmodule Id3vxTest do
     assert {:ok, out_tag} = Id3vx.parse_file(outpath)
 
     assert 1 = Enum.count(out_tag.frames)
+  end
+
+  test "ffmpeg parses attached picture" do
+    path = Path.join(@samples_path, "atp483.mp3")
+    outpath = "/tmp/out-atp483.mp3"
+
+    # Before:
+    {result, _} = System.shell("ffmpeg -i #{path} 2>&1")
+    refute String.contains?(result, "Error decoding attached picture description")
+
+    image = File.read!("test/samples/sample.png")
+    new_tag = Id3vx.Tag.create(3)
+    new_tag = Id3vx.Tag.add_text_frame(new_tag, "TIT2", "Cool Title")
+    new_tag = Id3vx.Tag.add_attached_picture(new_tag, "", "image/png", image)
+    Id3vx.replace_tag(new_tag, path, outpath)
+
+    {:ok, tag} = Id3vx.parse_file(outpath)
+
+    # After:
+    {result, _} = System.shell("ffmpeg -i #{outpath} 2>&1")
+    refute String.contains?(result, "Error decoding attached picture description")
+  end
+
+  test "ffmpeg parses title bom" do
+    path = Path.join(@samples_path, "atp483.mp3")
+    outpath = "/tmp/bomfunk.mp3"
+
+    image = File.read!("test/samples/sample.png")
+
+    new_tag = Id3vx.Tag.create(3)
+    # new_tag = Id3vx.Tag.add_text_frame(new_tag, "TIT2", "Cool Title")
+    new_tag = Id3vx.Tag.add_attached_picture(new_tag, "foo", "image/png", image)
+    Id3vx.replace_tag!(new_tag, path, outpath)
+
+    {result, _} = System.shell("ffmpeg -i #{outpath} 2>&1")
+    refute String.contains?(result, "Incorrect BOM")
   end
 end
