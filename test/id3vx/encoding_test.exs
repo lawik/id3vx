@@ -16,15 +16,14 @@ defmodule Id3vx.EncodingTest do
     result
   end
 
-  defp scratch(c, binary) do
-    IO.inspect(c)
+  defp scratch(c, tag) do
     # Hash based on test plus module name
     hash =
       :crypto.hash(:md5, Atom.to_string(c.module) <> Atom.to_string(c.test))
       |> Base.encode16(case: :lower)
 
     path = "test/samples/#{hash}.mp3"
-    File.write!(path, binary <> File.read!("test/empty.mp3"))
+    Id3vx.replace_tag!(tag, "test/empty.mp3", path)
     path
   end
 
@@ -68,9 +67,45 @@ defmodule Id3vx.EncodingTest do
     assert <<0x01::size(8), frame_text::binary>> = frames_data
     assert encoded_text == Id3vx.Utils.decode_unsynchronized(frame_text)
 
-    path = scratch(c, binary)
+    path = scratch(c, tag)
     assert id3v2(path) =~ "My Title"
     assert ffmpeg(path) =~ "My Title"
+  end
+
+  test "tag v2.3 with a TALB and TPE1 frame", c do
+    tag = %Tag{
+      version: 3,
+      revision: 0,
+      flags: %TagFlags{
+        unsynchronisation: false,
+        extended_header: false,
+        experimental: false
+      },
+      # size will be calculated, not provided
+      frames: [
+        %Frame{
+          id: "TIT2",
+          flags: %FrameFlags{},
+          data: %{
+            encoding: :utf16,
+            text: "My Title"
+          }
+        },
+        %Frame{
+          id: "TPE1",
+          flags: %FrameFlags{},
+          data: %{
+            encoding: :utf16,
+            text: "My Artist"
+          }
+        }
+      ]
+    }
+
+    path = scratch(c, tag)
+    IO.inspect(path)
+    assert id3v2(path) =~ "My Artist"
+    assert ffmpeg(path) =~ "My Artist"
   end
 
   test "encoding synchsafe numbers" do
@@ -174,9 +209,11 @@ defmodule Id3vx.EncodingTest do
 
     tag = Id3vx.Tag.create(3)
     tag = %{tag | frames: [frame]}
-    binary = Id3vx.encode_tag(tag)
-    path = scratch(c, binary)
-    assert id3v2(path) =~ "Title1"
+    path = scratch(c, tag)
+    assert {:ok, t} = Id3vx.parse_file(path)
+    IO.inspect(t)
+    IO.inspect(path)
+    assert id3v2(path) =~ "CHAP"
     assert ffmpeg(path) =~ "Title1"
   end
 
@@ -257,7 +294,7 @@ defmodule Id3vx.EncodingTest do
         encoding: :utf16,
         mime_type: "image/png",
         picture_type: :cover,
-        description: "it's a description",
+        description: "aa",
         image_data: <<24, 32>>
       }
     }
@@ -265,7 +302,7 @@ defmodule Id3vx.EncodingTest do
     binary = Frame.encode_frame(frame, %Tag{version: 3})
     assert <<frame_header::binary-size(10), frame_data::binary>> = binary
     assert <<"APIC", frame_size::size(32), _flags::binary-size(2)>> = frame_header
-    assert 36 == frame_size
+    assert 22 == frame_size
 
     assert <<0x01::size(8), frame_rest::binary>> = frame_data
 
@@ -274,7 +311,7 @@ defmodule Id3vx.EncodingTest do
     [pre, post] = :binary.split(frame_rest, <<0, 0>>)
     assert <<0x03, description::binary>> = pre
 
-    assert description == <<0xFE, 0xFF>> <> frame.data.description
+    assert description == "\xFE\xFF\0a\0a"
     image_data = post
 
     assert image_data == frame.data.image_data
@@ -314,8 +351,8 @@ defmodule Id3vx.EncodingTest do
       data: %Frame.Comment{
         encoding: :utf16,
         language: "english",
-        content_description: "foobarbaz",
-        content_text: "it's about foobarbaz"
+        content_description: "aa",
+        content_text: "bb"
       }
     }
 
@@ -323,15 +360,15 @@ defmodule Id3vx.EncodingTest do
     assert <<frame_header::binary-size(10), frame_data::binary>> = binary
 
     assert <<"COMM", frame_size::size(32), _flags::binary-size(2)>> = frame_header
-    assert 43 == frame_size
+    assert 22 == frame_size
 
     assert <<0x01::size(8), frame_rest::binary>> = frame_data
     assert <<"english", frame_rest::binary>> = frame_rest
 
     [content_description, content_text] = :binary.split(frame_rest, <<0, 0>>)
 
-    assert content_description == <<0xFE, 0xFF>> <> frame.data.content_description
-    assert content_text == <<0xFE, 0xFF>> <> frame.data.content_text
+    assert content_description == <<0xFE, 0xFF>> <> "\0a\0a"
+    assert content_text == <<0xFE, 0xFF>> <> "\0b\0b"
   end
 
   test "v2.3 encoding url frames" do
@@ -370,7 +407,7 @@ defmodule Id3vx.EncodingTest do
       flags: %FrameFlags{},
       data: %Frame.CustomURL{
         encoding: :utf16,
-        description: "it's a custom description",
+        description: "aa",
         url: "https://example.com"
       }
     }
@@ -378,10 +415,10 @@ defmodule Id3vx.EncodingTest do
     binary = Frame.encode_frame(frame, %Tag{version: 3})
     assert <<frame_header::binary-size(10), frame_data::binary>> = binary
     assert <<"WXXX", frame_size::size(32), _flags::binary-size(2)>> = frame_header
-    assert 49 == frame_size
+    assert 28 == frame_size
     assert <<0x01::size(8), frame_rest::binary>> = frame_data
     [description, url] = :binary.split(frame_rest, <<0, 0>>)
-    assert description == <<0xFE, 0xFF>> <> frame.data.description
+    assert description == <<0xFE, 0xFF>> <> "\0a\0a"
     assert url == frame.data.url
   end
 
@@ -554,7 +591,7 @@ defmodule Id3vx.EncodingTest do
     binary = Frame.encode_frame(frame, %Tag{version: 3})
     assert <<frame_header::binary-size(10), frame_data::binary>> = binary
     assert <<"COMR", frame_size::size(32), _flags::binary-size(2)>> = frame_header
-    assert 101 == frame_size
+    assert 130 == frame_size
 
     assert <<0x01::size(8), frame_rest::binary>> = frame_data
 

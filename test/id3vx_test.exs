@@ -685,11 +685,17 @@ defmodule Id3vxTest do
 
   test "ATP chapter encodes ok" do
     inpath = Path.join(@samples_path, "atp483.mp3")
+    output1 = id3v2(inpath)
+    output2 = ffmpeg(inpath)
+    IO.puts("parsing")
     assert {:ok, tag} = Id3vx.parse_file(inpath)
     outpath = Path.join(@samples_path, "atp-re-encode.mp3")
     assert Id3vx.replace_tag!(tag, inpath, outpath)
-    assert id3v2(outpath) =~ "CHAP"
-    assert ffmpeg(outpath) =~ "CHAP"
+    assert {:ok, tag} = Id3vx.parse_file(outpath)
+    # IO.puts(Id3vx.tag_to_string(tag))
+    assert Id3vx.tag_to_string(tag) =~ "CHAP"
+    assert id3v2(outpath) |> String.replace(outpath, inpath) == output1
+    assert ffmpeg(outpath) |> String.replace(outpath, inpath) == output2
   end
 
   test "Replace tag in mp3 file" do
