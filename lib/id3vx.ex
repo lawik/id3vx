@@ -77,6 +77,40 @@ defmodule Id3vx do
   @doc false
   def parse_states, do: @parse_states
 
+  def tag_to_string(tag) do
+    """
+    version: #{tag.version}
+    flags: #{inspect(tag.flags)}
+
+    frames:
+    #{frames_to_string(tag.frames)}
+    """
+  end
+
+  defp frames_to_string(frames) do
+    frames
+    |> Enum.map(&frame_to_string/1)
+    |> Enum.join("\n")
+  end
+
+  defp frame_to_string(%{frames: frames} = frame) do
+    """
+    #{frame.id} (#{frame.label}):
+      inspect(#{frame.data})
+      subframes start:
+      #{frames_to_string(frames)}
+      subframes end
+    """
+  end
+
+  defp frame_to_string(frame) do
+    data = Map.delete(frame.data, :__struct__)
+
+    """
+    #{frame.id} (#{frame.label}): inspect(#{inspect(data)})
+    """
+  end
+
   @doc """
   Parse an ID3 tag from the given file path.
 

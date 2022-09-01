@@ -292,15 +292,18 @@ defmodule Id3vx.Frame do
         encode_frame(frame, tag)
       end)
 
+    start_t = Utils.pad_to_byte_size(start_time, 4)
+    end_t = Utils.pad_to_byte_size(end_time, 4)
+    start_o = Utils.pad_to_byte_size(start_offset, 4)
+    end_o = Utils.pad_to_byte_size(end_offset, 4)
+
     frame_binary = [
-      element_id,
+      encode_string(:iso8859_1, element_id),
       <<0>>,
-      <<
-        start_time::size(32),
-        end_time::size(32),
-        start_offset::size(32),
-        end_offset::size(32)
-      >>,
+      start_t,
+      end_t,
+      start_o,
+      end_o,
       encoded_frames
     ]
 
@@ -401,7 +404,7 @@ defmodule Id3vx.Frame do
 
     encoding_byte = get_encoding_byte(encoding)
     null_byte = get_null_byte(encoding)
-    image_description = convert_string(encoding, description, true)
+    image_description = encode_string(encoding, description)
 
     picture_type =
       @picture_type
@@ -461,8 +464,8 @@ defmodule Id3vx.Frame do
     encoding_byte = get_encoding_byte(encoding)
     null_byte = get_null_byte(encoding)
 
-    content_description = convert_string(encoding, content_description, true)
-    content_text = convert_string(encoding, content_text, true)
+    content_description = encode_string(encoding, content_description)
+    content_text = encode_string(encoding, content_text)
 
     frame_binary = [<<encoding_byte>>, language, content_description, null_byte, content_text]
 
@@ -480,8 +483,8 @@ defmodule Id3vx.Frame do
 
     encoding_byte = get_encoding_byte(encoding)
     null_byte = get_null_byte(encoding)
-    url = convert_string(:iso8859_1, url)
-    description = convert_string(encoding, description, true)
+    url = encode_string(:iso8859_1, url)
+    description = encode_string(encoding, description)
     frame_binary = [<<encoding_byte>>, description, null_byte, url]
 
     frame_size = IO.iodata_length(frame_binary)
@@ -494,7 +497,7 @@ defmodule Id3vx.Frame do
       url: url
     } = frame.data
 
-    url = convert_string(:iso8859_1, url)
+    url = encode_string(:iso8859_1, url)
     frame_binary = [url]
     frame_size = IO.iodata_length(frame_binary)
     header = encode_header(frame, frame_size, tag)
@@ -622,15 +625,15 @@ defmodule Id3vx.Frame do
 
     null_byte = get_null_byte(encoding)
     encoding_byte = get_encoding_byte(encoding)
-    contact_url = convert_string(:iso8859_1, contact_url)
+    contact_url = encode_string(:iso8859_1, contact_url)
 
     recieved_as =
       @recieved_as_type
       |> Utils.flip_map()
       |> Map.get(recieved_as)
 
-    seller_name = convert_string(encoding, seller_name, true)
-    description = convert_string(encoding, description, true)
+    seller_name = encode_string(encoding, seller_name)
+    description = encode_string(encoding, description)
 
     frame_binary = [
       <<encoding_byte>>,
@@ -700,7 +703,7 @@ defmodule Id3vx.Frame do
 
     encoding = @text_encoding[encoding]
     {description, rest} = split_at_null(encoding, rest)
-    description = convert_string(encoding, description)
+    description = decode_string(encoding, description)
 
     %Frame{
       id: id,
@@ -772,11 +775,9 @@ defmodule Id3vx.Frame do
     <<encoding::size(8), language::binary-size(3), data::binary>> = data
     encoding = @text_encoding[encoding]
 
-    %{text: text_parts} = parse_encoded_text(encoding, data)
-    # This construction makes it ignore any extra termination which
-    # is according to spec and resilient to issue
-    # The Podcast Chapters app produces some odd COMM fields
-    [description | [text | _]] = text_parts
+    {first, second} = split_at_null(encoding, data)
+    description = decode_string(encoding, first)
+    text = decode_string(encoding, second)
 
     %Frame{
       id: id,
@@ -801,9 +802,8 @@ defmodule Id3vx.Frame do
   def parse("T" <> _ = id, %Tag{version: 3}, _flags, data) do
     <<encoding::size(8), data::binary>> = data
     encoding = @text_encoding[encoding]
-    %{text: text} = parse_encoded_text(encoding, data)
-    # Ignore any extra text pieces, according to spec
-    [text | []] = text
+    {first, _second} = split_at_null(encoding, data)
+    text = decode_string(encoding, first)
 
     %Frame{
       id: id,
@@ -816,10 +816,14 @@ defmodule Id3vx.Frame do
     encoding = @text_encoding[encoding]
 
     # I've seen double null leading here, not sure why
-    {description, rest} = split_at_a_null_or_two(data)
-    description = convert_string(encoding, description)
+    {description, rest} = split_at_null(encoding, data)
 
-    %{text: [url]} = parse_encoded_text(:iso8859_1, rest)
+    description = decode_string(encoding, description)
+
+    rest = skip_leading_null(rest)
+    # Drop trailing nulls
+    {url, _drop} = split_at_next_null(rest)
+    url = decode_string(:iso88591_1, url)
 
     %Frame{
       id: id,
@@ -832,14 +836,12 @@ defmodule Id3vx.Frame do
   end
 
   def parse("W" <> _ = id, _tag, _flags, data) do
-    %{text: pieces} = parse_encoded_text(:iso8859_1, data)
-
-    # If there is a leading null, skip it
-    url =
-      case pieces do
-        ["" | [url | _]] -> url
-        [url | _] -> url
-      end
+    # For some reason I've seen leading nulls here
+    data = skip_leading_null(data)
+    {data, _skip} = split_at_null(:iso8859_1, data)
+    # Drop trailing nulls
+    {url, _drop} = split_at_next_null(data)
+    url = decode_string(:iso88591_1, url)
 
     %Frame{
       id: id,
@@ -859,7 +861,7 @@ defmodule Id3vx.Frame do
     <<date::binary-size(8), rest::binary>> = rest
     seller = rest
 
-    seller = convert_string(encoding, seller)
+    seller = decode_string(encoding, seller)
 
     %Frame{
       id: id,
@@ -980,7 +982,7 @@ defmodule Id3vx.Frame do
     {seller_name, rest} = split_at_null(encoding, rest)
 
     {description, rest} = split_at_null(encoding, rest)
-    description = convert_string(encoding, description)
+    description = decode_string(encoding, description)
 
     [picture_mime, rest] = :binary.split(rest, <<0>>)
 
@@ -1003,6 +1005,8 @@ defmodule Id3vx.Frame do
   end
 
   def parse(id, _tag, _flags, _data) do
+    Logger.warn("Unimplemented frame parsed: #{id}")
+
     %Frame{
       id: id,
       label: "#{id} is not implemented, please contribute, it's not hard.",
@@ -1162,6 +1166,13 @@ defmodule Id3vx.Frame do
     end
   end
 
+  defp skip_leading_null(data) do
+    case data do
+      <<0x00, data::binary>> -> skip_leading_null(data)
+      data -> data
+    end
+  end
+
   defp split_at_null(encoding, data) do
     case encoding do
       :iso8859_1 ->
@@ -1198,70 +1209,45 @@ defmodule Id3vx.Frame do
     end
   end
 
-  def parse_encoded_text(encoding, data) do
-    {strings, _rest} = decode_string_sequence(encoding, byte_size(data), data)
-
-    %{
-      encoding: encoding,
-      text: strings
-    }
+  def decode_string(:iso8859_1, data) do
+    decode_string(:latin1, data)
   end
 
-  defp decode_string_sequence(encoding, max_byte_size, data, acc \\ [])
-
-  # Out of data, clean up and return
-  defp decode_string_sequence(_, max_byte_size, data, acc) when max_byte_size <= 0 do
-    {Enum.reverse(acc), data}
+  def decode_string(:utf16be, data) do
+    decode_string({:utf16, :big}, data)
   end
 
-  # decode_string and recurse
-  defp decode_string_sequence(encoding, max_byte_size, data, acc) do
-    {str, str_size, rest} = decode_string(encoding, max_byte_size, data)
-    decode_string_sequence(encoding, max_byte_size - str_size, rest, [str | acc])
+  def decode_string(_encoding, data) do
+    {found_encoding, _bom_size} = :unicode.bom_to_encoding(data)
+    bom = :unicode.encoding_to_bom(found_encoding)
+
+    data =
+      if byte_size(bom) > 0 do
+        [_ | data] = :binary.split(data, bom)
+        data
+      else
+        data
+      end
+
+    :unicode.characters_to_binary(data, found_encoding, :utf8)
   end
 
-  defp decode_string(encoding, max_byte_size, data) when encoding in [:utf16, :utf16be] do
-    {str, rest} = get_double_null_terminated(data, max_byte_size)
-
-    {convert_string(encoding, str), byte_size(str) + 2, rest}
+  def encode_string(:utf16be, data) do
+    encode_string({:utf16, :big}, data, skip_bom: true)
   end
 
-  defp decode_string(encoding, max_byte_size, data) when encoding in [:iso8859_1, :utf8] do
-    case :binary.split(data, <<0>>) do
-      [str, rest] when byte_size(str) + 1 <= max_byte_size ->
-        {str, byte_size(str) + 1, rest}
-
-      _ ->
-        {str, rest} = :erlang.split_binary(data, max_byte_size)
-        {str, max_byte_size, rest}
-    end
+  def encode_string(:iso8859_1, data) do
+    encode_string(:latin1, data)
   end
 
-  defp convert_string(encoding, str, add_bom? \\ false)
+  def encode_string(to_encoding, data, opts \\ []) do
+    {encoding, _bom_length} = :unicode.bom_to_encoding(data)
 
-  defp convert_string(encoding, str, _) when encoding in [:iso8859_1, :utf8] do
-    str
-  end
-
-  defp convert_string(:utf16, data, add_bom?) do
-    {encoding, bom_length} = :unicode.bom_to_encoding(data)
-
-    {_, string_data} = String.split_at(data, bom_length)
-
-    if add_bom? do
-      bom = :unicode.encoding_to_bom(:utf16)
-      bom <> :unicode.characters_to_binary(string_data, encoding)
+    if opts[:skip_bom] == true do
+      :unicode.characters_to_binary(data, encoding, to_encoding)
     else
-      :unicode.characters_to_binary(string_data, encoding)
-    end
-  end
-
-  defp convert_string(:utf16be, data, add_bom?) do
-    if add_bom? do
-      bom = :unicode.encoding_to_bom({:utf16, :big})
-      bom <> :unicode.characters_to_binary(data, {:utf16, :big})
-    else
-      :unicode.characters_to_binary(data, {:utf16, :big})
+      bom = :unicode.encoding_to_bom(to_encoding)
+      bom <> :unicode.characters_to_binary(data, encoding, to_encoding)
     end
   end
 

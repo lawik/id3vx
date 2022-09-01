@@ -65,13 +65,11 @@ defmodule Id3vx.UnsynchronisationTest do
       },
       frames: [
         %Frame{
-          id: "APIC",
+          id: "TIT1",
           flags: %FrameFlags{},
-          data: %Frame.AttachedPicture{
-            description: "image",
-            mime_type: "image/jpg",
-            picture_type: :other,
-            image_data: <<0xFE::8, 0xFE::8>>
+          data: %Frame.Text{
+            text: "",
+            encoding: :iso8859_1
           }
         }
       ]
