@@ -13,7 +13,14 @@ defmodule Id3vxTest do
 
   defp ffmpeg(path) do
     {result, _} = System.shell("ffmpeg -hide_banner -i #{path} 2>&1")
+
+    # Remove mp3 messages
     result
+    |> String.split("\n")
+    |> Enum.reject(fn string ->
+      String.starts_with?(string, "[mp3")
+    end)
+    |> Enum.join("\n")
   end
 
   @samples_path "test/samples"
@@ -687,12 +694,10 @@ defmodule Id3vxTest do
     inpath = Path.join(@samples_path, "atp483.mp3")
     output1 = id3v2(inpath)
     output2 = ffmpeg(inpath)
-    IO.puts("parsing")
     assert {:ok, tag} = Id3vx.parse_file(inpath)
     outpath = Path.join(@samples_path, "atp-re-encode.mp3")
     assert Id3vx.replace_tag!(tag, inpath, outpath)
     assert {:ok, tag} = Id3vx.parse_file(outpath)
-    # IO.puts(Id3vx.tag_to_string(tag))
     assert Id3vx.tag_to_string(tag) =~ "CHAP"
     assert id3v2(outpath) |> String.replace(outpath, inpath) == output1
     assert ffmpeg(outpath) |> String.replace(outpath, inpath) == output2

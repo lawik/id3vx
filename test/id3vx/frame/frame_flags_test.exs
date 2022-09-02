@@ -31,17 +31,17 @@ defmodule Id3vx.Frame.FrameFlagsTest do
 
     assert <<tag_header::binary-size(10), tag_rest::binary>> = binary
 
-    assert <<"ID3", 3::integer, 0::integer, 0b10000000::size(8), tag_size::binary-size(4)>> =
+    assert <<"ID3", 3::integer, 0::integer, 0b00000000::size(8), tag_size::binary-size(4)>> =
              tag_header
 
     tag_size = Id3vx.Utils.decode_synchsafe_integer(tag_size)
 
-    assert <<"TIT2", frame_size::size(32), 0::size(8), 1::1, 0::7, 0::8, 0::8, 0::8, 61::8,
+    assert <<"TIT2", frame_size::size(32), 0::size(8), 128::size(8), 0::8, 0::8, 0::8, 59::8,
              _compressed_data::binary>> = tag_rest
 
     # Note: It should have been padded with one null byte
-    assert 71 == tag_size
-    assert 60 == frame_size
+    assert 68 == tag_size
+    assert 58 == frame_size
 
     tag2 = Id3vx.parse_binary!(binary)
 
