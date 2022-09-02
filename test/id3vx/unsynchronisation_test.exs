@@ -30,6 +30,7 @@ defmodule Id3vx.UnsynchronisationTest do
     end
   end
 
+  @tag :skip
   test "v2.3 unsynchronisation required" do
     tag = %Tag{
       version: 3,

@@ -55,17 +55,16 @@ defmodule Id3vx.EncodingTest do
     binary = Id3vx.encode_tag(tag)
 
     assert <<tag_header::binary-size(10), tag_rest::binary>> = binary
-    assert <<"ID3", 3::integer, 0::integer, 128::size(8), tag_size::binary-size(4)>> = tag_header
+    assert <<"ID3", 3::integer, 0::integer, 0::size(8), tag_size::binary-size(4)>> = tag_header
     tag_size = Id3vx.Utils.decode_synchsafe_integer(tag_size)
-    assert 32 == tag_size
+    assert 29 == tag_size
 
     assert <<"TIT2", frame_size::size(32), _flags::binary-size(2), frames_data::binary>> =
              tag_rest
 
-    assert 21 == frame_size
+    assert 19 == frame_size
 
     assert <<0x01::size(8), frame_text::binary>> = frames_data
-    assert encoded_text == Id3vx.Utils.decode_unsynchronized(frame_text)
 
     path = scratch(c, tag)
     assert id3v2(path) =~ "My Title"
@@ -103,7 +102,9 @@ defmodule Id3vx.EncodingTest do
     }
 
     path = scratch(c, tag)
-    IO.inspect(path)
+    {:ok, tag} = Id3vx.parse_file(path)
+    assert length(tag.frames) == 2
+
     assert id3v2(path) =~ "My Artist"
     assert ffmpeg(path) =~ "My Artist"
   end
@@ -182,7 +183,7 @@ defmodule Id3vx.EncodingTest do
     assert <<frame_header::binary-size(10), frame_data::binary>> = binary
     assert <<"CHAP", frame_size::size(32), _flags::binary-size(2)>> = frame_header
 
-    assert 75 == frame_size
+    assert 71 == frame_size
     ["chp1", frame_rest] = :binary.split(frame_data, <<0>>)
 
     <<0::size(32), 50::size(32), 0::size(32), 5::size(32), sub_frames::binary>> = frame_rest
@@ -190,29 +191,27 @@ defmodule Id3vx.EncodingTest do
     assert <<"TIT2", frame_size::size(32), _flags::binary-size(2), frames_data::binary>> =
              sub_frames
 
-    assert 17 == frame_size
+    assert 15 == frame_size
 
     assert <<sub_frame1::binary-size(frame_size), more_frames::binary>> = frames_data
 
     assert <<0x01::size(8), frame_text::binary>> = sub_frame1
-    assert encoded_text1 == frame_text
+    assert encoded_text1 == frame_text <> <<0, 0>>
 
     assert <<"TIT3", frame_size::size(32), _flags::binary-size(2), frames_data::binary>> =
              more_frames
 
-    assert 17 == frame_size
+    assert 15 == frame_size
 
     assert <<sub_frame1::binary-size(frame_size)>> = frames_data
 
     assert <<0x01::size(8), frame_text::binary>> = sub_frame1
-    assert encoded_text1 == frame_text
+    assert encoded_text1 == frame_text <> <<0, 0>>
 
     tag = Id3vx.Tag.create(3)
     tag = %{tag | frames: [frame]}
     path = scratch(c, tag)
     assert {:ok, t} = Id3vx.parse_file(path)
-    IO.inspect(t)
-    IO.inspect(path)
     assert id3v2(path) =~ "CHAP"
     assert ffmpeg(path) =~ "Title1"
   end
@@ -259,7 +258,7 @@ defmodule Id3vx.EncodingTest do
     assert <<frame_header::binary-size(10), frame_data::binary>> = binary
     assert <<"CTOC", frame_size::size(32), _flags::binary-size(2)>> = frame_header
 
-    assert 66 == frame_size
+    assert 62 == frame_size
     ["toc1", frame_rest] = :binary.split(frame_data, <<0>>)
 
     <<0::size(6), 1::size(1), 1::size(1), 2::size(8), rest::binary>> = frame_rest
@@ -269,22 +268,22 @@ defmodule Id3vx.EncodingTest do
     assert <<"TIT2", frame_size::size(32), _flags::binary-size(2), frames_data::binary>> =
              sub_frames
 
-    assert 15 == frame_size
+    assert 13 == frame_size
 
     assert <<sub_frame1::binary-size(frame_size), more_frames::binary>> = frames_data
 
     assert <<0x01::size(8), frame_text::binary>> = sub_frame1
-    assert encoded_text == frame_text
+    assert encoded_text == frame_text <> <<0, 0>>
 
     assert <<"TIT3", frame_size::size(32), _flags::binary-size(2), frames_data::binary>> =
              more_frames
 
-    assert 15 == frame_size
+    assert 13 == frame_size
 
     assert <<sub_frame1::binary-size(frame_size)>> = frames_data
 
     assert <<0x01::size(8), frame_text::binary>> = sub_frame1
-    assert encoded_text == frame_text
+    assert encoded_text == frame_text <> <<0, 0>>
   end
 
   test "v2.3 encoding APIC frame" do

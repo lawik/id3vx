@@ -276,6 +276,12 @@ defmodule Id3vx.Frame do
     IO.iodata_to_binary([header, grouped_data])
   end
 
+  def encode_frame(%Frame{data: %Frame.Unknown{}} = frame, %{version: 3} = tag) do
+    frame_size = byte_size(frame.raw_data)
+    header = encode_header(frame, frame_size, tag)
+    IO.iodata_to_binary([header, frame.raw_data])
+  end
+
   def encode_frame(%Frame{id: "CHAP"} = frame, %{version: 3} = tag) do
     %{
       element_id: element_id,
@@ -349,16 +355,6 @@ defmodule Id3vx.Frame do
   end
 
   def encode_frame(%Frame{id: "T" <> _} = frame, %{version: 3} = tag) do
-    {bom, encoding, terminator} =
-      case frame.data.encoding do
-        :iso8859_1 ->
-          {<<>>, :latin1, <<0x00>>}
-
-        :utf16 ->
-          encoding = {:utf16, :big}
-          {:unicode.encoding_to_bom(encoding), encoding, <<0x00, 0x00>>}
-      end
-
     text =
       case frame.data.text do
         text when is_binary(text) ->
@@ -375,17 +371,11 @@ defmodule Id3vx.Frame do
           text
       end
 
-    encoded_text = [
-      bom,
-      :unicode.characters_to_binary(text, :utf8, encoding),
-      terminator
-    ]
+    encoding = frame.data.encoding
 
-    encoding_byte =
-      @text_encoding
-      |> Utils.flip_map()
-      |> Map.get(frame.data.encoding)
+    encoded_text = encode_string(encoding, text)
 
+    encoding_byte = get_encoding_byte(encoding)
     frame_binary = [<<encoding_byte>>, encoded_text]
     frame_size = IO.iodata_length(frame_binary)
     header = encode_header(frame, frame_size, tag)
@@ -424,12 +414,6 @@ defmodule Id3vx.Frame do
     frame_size = IO.iodata_length(frame_binary)
     header = encode_header(frame, frame_size, tag)
     IO.iodata_to_binary([header, frame_binary])
-  end
-
-  def encode_frame(%Frame{data: %Frame.Unknown{}} = frame, %{version: 3} = tag) do
-    frame_size = byte_size(frame.raw_data)
-    header = encode_header(frame, frame_size, tag)
-    IO.iodata_to_binary([header, frame.raw_data])
   end
 
   def encode_frame(%Frame{id: "OWNE"} = frame, %{version: 3} = tag) do
@@ -1144,18 +1128,6 @@ defmodule Id3vx.Frame do
     }
   end
 
-  defp split_at_a_null_or_two(data) do
-    {first, rest} = split_at_next_null(data)
-
-    rest =
-      case rest do
-        <<0::size(8), rest::binary>> -> rest
-        rest -> rest
-      end
-
-    {first, rest}
-  end
-
   defp get_null_byte(encoding) do
     case encoding do
       :iso8859_1 ->
@@ -1236,34 +1208,24 @@ defmodule Id3vx.Frame do
     encode_string({:utf16, :big}, data, skip_bom: true)
   end
 
+  def encode_string(:utf16, data) do
+    encode_string({:utf16, :big}, data)
+  end
+
   def encode_string(:iso8859_1, data) do
     encode_string(:latin1, data)
   end
 
   def encode_string(to_encoding, data, opts \\ []) do
-    {encoding, _bom_length} = :unicode.bom_to_encoding(data)
+    # Elixir default string is UTF-8
+    current_encoding = :utf8
 
     if opts[:skip_bom] == true do
-      :unicode.characters_to_binary(data, encoding, to_encoding)
+      :unicode.characters_to_binary(data, current_encoding, to_encoding)
     else
       bom = :unicode.encoding_to_bom(to_encoding)
-      bom <> :unicode.characters_to_binary(data, encoding, to_encoding)
+      bom <> :unicode.characters_to_binary(data, current_encoding, to_encoding)
     end
-  end
-
-  defp get_double_null_terminated(data, max_byte_size, acc \\ [])
-
-  defp get_double_null_terminated(rest, 0, acc) do
-    {acc |> Enum.reverse() |> :binary.list_to_bin(), rest}
-  end
-
-  defp get_double_null_terminated(<<0, 0, rest::binary>>, _, acc) do
-    {acc |> Enum.reverse() |> :binary.list_to_bin(), rest}
-  end
-
-  defp get_double_null_terminated(<<a::size(8), b::size(8), rest::binary>>, max_byte_size, acc) do
-    next_max_byte_size = max_byte_size - 2
-    get_double_null_terminated(rest, next_max_byte_size, [b, a | acc])
   end
 
   defp get_encoding_byte(encoding) do
