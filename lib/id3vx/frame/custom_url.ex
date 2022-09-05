@@ -3,7 +3,9 @@ defmodule Id3vx.Frame.CustomURL do
   WXXX frame struct.
   """
 
-  defstruct encoding: :utf16, description: nil, url: nil
+  # Encoding defaults to iso8859_1 as Overcast (podcast player)
+  # does not seem to handle utf16 for this particular frame.
+  defstruct encoding: :iso8859_1, description: nil, url: nil
 
   alias Id3vx.Frame
   alias Id3vx.Frame.CustomURL
