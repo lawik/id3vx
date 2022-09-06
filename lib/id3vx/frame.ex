@@ -330,7 +330,8 @@ defmodule Id3vx.Frame do
 
     entry_count = length(child_elements)
 
-    encoded_child_elements = Enum.join(child_elements, <<0>>)
+    # null-separated with trailing null
+    encoded_child_elements = Enum.join(child_elements, <<0>>) <> <<0>>
 
     # Encode sub-frames
     encoded_frames =

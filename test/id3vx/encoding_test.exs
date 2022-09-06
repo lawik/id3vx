@@ -258,12 +258,12 @@ defmodule Id3vx.EncodingTest do
     assert <<frame_header::binary-size(10), frame_data::binary>> = binary
     assert <<"CTOC", frame_size::size(32), _flags::binary-size(2)>> = frame_header
 
-    assert 62 == frame_size
+    assert 63 == frame_size
     ["toc1", frame_rest] = :binary.split(frame_data, <<0>>)
 
     <<0::size(6), 1::size(1), 1::size(1), 2::size(8), rest::binary>> = frame_rest
 
-    <<"chp1", 0::8, "chp2", sub_frames::binary>> = rest
+    <<"chp1", 0::8, "chp2", 0::8, sub_frames::binary>> = rest
 
     assert <<"TIT2", frame_size::size(32), _flags::binary-size(2), frames_data::binary>> =
              sub_frames

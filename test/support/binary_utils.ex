@@ -76,7 +76,15 @@ defmodule Id3vx.BinaryUtils do
   defp diffs_to_io(steps, str \\ []) do
     case steps do
       <<offset::32, a::8, b::8, rest::binary>> ->
-        diffs_to_io(rest, [str, inspect(offset), ":", inspect(a), ", ", inspect(b), "\n"])
+        diffs_to_io(rest, [
+          str,
+          inspect(round(offset / 2)),
+          ": ",
+          inspect(a),
+          ",",
+          inspect(b),
+          "\n"
+        ])
 
       <<>> ->
         str
