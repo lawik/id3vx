@@ -464,6 +464,7 @@ defmodule Id3vx.EncodingTest do
 
     binary = Frame.encode_frame(frame, %Tag{version: 3})
     assert <<frame_header::binary-size(10), frame_data::binary>> = binary
+
     assert <<"PRIV", frame_size::size(32), _flags::binary-size(2)>> = frame_header
     assert 19 == frame_size
 
@@ -604,6 +605,7 @@ defmodule Id3vx.EncodingTest do
 
     binary = Frame.encode_frame(frame, %Tag{version: 3})
     assert <<frame_header::binary-size(10), frame_data::binary>> = binary
+
     assert <<"COMR", frame_size::size(32), _flags::binary-size(2)>> = frame_header
     assert 130 == frame_size
 
@@ -740,5 +742,34 @@ defmodule Id3vx.EncodingTest do
 
     assert {:ok, _t} = Id3vx.parse_file(path)
     assert id3v2(path) =~ "POPM"
+  end
+
+  test "v2.3 encoding USER frame", c do
+    frame = %Frame{
+      id: "USER",
+      flags: %FrameFlags{},
+      data: %Frame.TermsOfUse{
+        encoding: :utf16,
+        language: "eng",
+        text: "random foobarbaz"
+      }
+    }
+
+    binary = Frame.encode_frame(frame, %Tag{version: 3})
+    assert <<frame_header::binary-size(10), frame_data::binary>> = binary
+    assert <<"USER", frame_size::size(32), _flags::binary-size(2)>> = frame_header
+    assert 20 == frame_size
+    assert <<0x01::size(8), frame_rest::binary>> = frame_data
+    <<language::binary-size(3), text::binary>> = frame_rest
+
+    assert language == frame.data.language
+    assert text == frame.data.text
+
+    tag = Id3vx.Tag.create(3)
+    tag = %{tag | frames: [frame]}
+    path = scratch(c, tag)
+
+    assert {:ok, _t} = Id3vx.parse_file(path)
+    assert id3v2(path) =~ "USER"
   end
 end
